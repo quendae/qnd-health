@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { formatDistance, formatDuration, progressPercent, weekCompletion } from './view-model';
+import { dateLabel, formatDistance, formatDuration, progressPercent, weekCompletion } from './view-model';
 import type { TodayResponse } from './types';
 
 describe('Today view model', () => {
   it('formats Garmin-style durations and distances', () => {
     expect(formatDuration(4460)).toBe('1 h 14 min');
     expect(formatDistance(5120)).toBe('5.1 km');
+  });
+
+  it('rolls rounded minutes into the next hour instead of showing 60 minutes', () => {
+    expect(formatDuration(3599)).toBe('1 h 00 min');
+  });
+
+  it('formats dates in Polish', () => {
+    expect(dateLabel('2026-09-21')).toBe('poniedziałek, 21 września');
   });
 
   it('clamps progress to a display-safe percent', () => {
