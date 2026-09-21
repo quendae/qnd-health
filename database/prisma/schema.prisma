@@ -117,6 +117,7 @@ model DailyHealth {
   source               DataSource
   transport            String?
   steps                Int?
+  stepsGoal            Float?
   floorsAscended       Float?
   intensityMinutes     Int?
   restingHr            Int?
@@ -266,7 +267,6 @@ model CoachDecision {
   id               String   @id @default(uuid())
   recommendationId String
   decision         String
-  beforeJson       Json?
-  afterJson        Json?
-  createdAt        DateTime @default(now())
+  appliedPayload   Json?
+  decidedAt        DateTime @default(now())
 }
