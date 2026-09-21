@@ -24,6 +24,11 @@ function mapMeasurement(row: any): MeasurementRecord {
     scaleBmrKcal: row.scaleBmrKcal ?? null,
     metabolicAge: row.metabolicAge ?? null,
     physiqueRating: row.physiqueRating ?? null,
+    bicepsCircumferenceCm: row.bicepsCircumferenceCm ?? null,
+    chestCircumferenceCm: row.chestCircumferenceCm ?? null,
+    waistCircumferenceCm: row.waistCircumferenceCm ?? null,
+    hipsCircumferenceCm: row.hipsCircumferenceCm ?? null,
+    thighCircumferenceCm: row.thighCircumferenceCm ?? null,
     transport: row.transport ?? null,
     source: row.source,
   };
