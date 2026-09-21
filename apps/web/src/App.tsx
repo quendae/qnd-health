@@ -15,7 +15,7 @@ import { WidgetSettings } from './WidgetSettings';
 import type { ActivityCandidate, NutritionEntry, PlanItem, TodayResponse, WorkoutStructure } from './types';
 import { activityLabel } from './activity-catalog';
 import { formatMetric } from './format-number';
-import { dateLabel, formatDistance, formatDuration, greeting, progressPercent, shortDateLabel, weekCompletion } from './view-model';
+import { dateLabel, formatDistance, formatDuration, greeting, nutritionMacroCards, nutritionMealListClass, progressPercent, shortDateLabel, weekCompletion } from './view-model';
 import { defaultTodayWidgetLayout, normalizeTodayWidgetLayout, type TodayWidgetId, type TodayWidgetPreference } from './widget-layout';
 
 const TOKEN_KEY = 'qnd-health.web-token';
@@ -149,13 +149,7 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
     ? Math.round((totals.caloriesKcal / goalKcal) * 100)
     : null;
   const calorieDelta = totals.caloriesKcal != null && goalKcal != null ? goalKcal - totals.caloriesKcal : null;
-  const proteinPercent = totals.proteinGrams != null && goalProtein != null && goalProtein > 0
-    ? Math.round((totals.proteinGrams / goalProtein) * 100)
-    : null;
-  const macro = [
-    ['Białko', totals.proteinGrams], ['Węglowodany', totals.carbsGrams],
-    ['Tłuszcz', totals.fatGrams], ['Błonnik', totals.fiberGrams],
-  ] as const;
+  const macro = nutritionMacroCards(totals, goalProtein);
   return <section className="panel nutrition-panel widget-card">
     <header><div><h2><Utensils /> Odżywianie</h2><p>Podsumowanie tego, co zostało zapisane.</p></div><span className="section-link orange">Dzienny bilans</span></header>
     <div className="calorie-head calorie-goal-head">
@@ -166,10 +160,13 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
       </div>
       <span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span>
     </div>
-    {goalProtein != null && <div className="protein-goal-row"><div><span>Białko</span><strong>{formatMetric(totals.proteinGrams)} / {formatMetric(goalProtein, 0)} g</strong></div>{proteinPercent == null ? <small>Brak pełnych danych o białku.</small> : <><ProgressBar value={proteinPercent} /><small>{proteinPercent}% dziennego celu</small></>}</div>}
-    <div className="macros">{macro.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value == null ? '—' : `${formatMetric(value)} g`}</strong></div>)}</div>
+    <div className="macros">{macro.map(item => <div className={`macro-card ${item.goal != null ? 'with-goal' : ''}`} key={item.label}>
+      <span>{item.label}</span>
+      <strong>{item.value == null ? '—' : item.goal != null ? `${formatMetric(item.value)} / ${formatMetric(item.goal, 0)} g` : `${formatMetric(item.value)} g`}</strong>
+      {item.goal != null && (item.percent == null ? <small>Brak danych o białku</small> : <><ProgressBar value={item.percent} /><small>{item.percent}% celu</small></>)}
+    </div>)}</div>
     <div className="meals-head"><h3>Dzisiejsze wpisy</h3></div>
-    <div className="meal-list">
+    <div className={nutritionMealListClass(today.nutrition.entries.length)}>
       {today.nutrition.entries.length === 0 && <div className="empty">Nie zapisano jeszcze żadnego jedzenia.</div>}
       {today.nutrition.entries.map(entry => <div className="meal nutrition-entry" key={entry.id}>
         <div className="meal-copy"><strong>{entry.title}</strong>{entry.quantityText && <span>{entry.quantityText}</span>}</div>
