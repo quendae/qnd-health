@@ -48,6 +48,9 @@ export interface DailyHealth {
   steps?: number | null;
   stepsGoal?: number | null;
   floorsAscended?: number | null;
+  floorsDescended?: number | null;
+  vo2Max?: number | null;
+  providerBmrKcal?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
   hrv?: number | null;
