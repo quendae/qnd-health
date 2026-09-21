@@ -3,6 +3,7 @@ export interface DailyHealthRecord {
   source: string;
   transport?: string | null;
   steps?: number | null;
+  stepsGoal?: number | null;
   floorsAscended?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
@@ -25,6 +26,7 @@ export interface DailyHealthUpsert {
   source: string;
   transport?: string | null;
   steps?: number | null;
+  stepsGoal?: number | null;
   floorsAscended?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
