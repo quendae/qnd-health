@@ -7,6 +7,7 @@ import {
 import { ApiError, QndHealthApi } from './api';
 import { CustomActivityDialog } from './CustomActivityDialog';
 import { NutritionEntryDialog } from './NutritionEntryDialog';
+import { CoachView } from './CoachView';
 import { HistoryView } from './HistoryView';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
@@ -301,7 +302,7 @@ export default function App() {
   else if (section === 'history' && api) content = <HistoryView api={api} selectedDate={date} onError={setError} />;
   else if (section === 'progress' && api) content = <ProgressView api={api} selectedDate={date} onError={setError} />;
   else if (section === 'settings' && api) content = <SettingsView api={api} energy={today?.energy ?? null} onSaved={load} onError={setError} />;
-  else if (section === 'coach') content = <section className="placeholder panel"><div><h2>Coach</h2><p>Ten obszar podłączymy do DeepSeek po zebraniu wystarczającej historii danych.</p></div></section>;
+  else if (section === 'coach' && api) content = <CoachView api={api} onError={setError} />;
   else if (!today) content = <div className="loading-card">Wczytywanie QND Health…</div>;
   else content = <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>;
 
