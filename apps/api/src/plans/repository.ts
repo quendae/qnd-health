@@ -13,6 +13,10 @@ export interface StoredPlanItem {
   currentManualValue: number | null;
   unit: string | null;
   status: PlanStatus;
+  activityType?: string | null;
+  plannedDurationSeconds?: number | null;
+  plannedDistanceMeters?: number | null;
+  linkedActivityId?: string | null;
 }
 
 export type NewStoredPlanItem = Omit<StoredPlanItem, 'id'>;
