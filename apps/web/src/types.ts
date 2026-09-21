@@ -184,3 +184,37 @@ export interface ProgressResponse {
   weight: { firstKg: number | null; latestKg: number | null; deltaKg: number | null };
   series: ProgressSeriesPoint[];
 }
+
+export interface CoachConversation {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoachMessage {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  model: string | null;
+  toolMetadata: unknown | null;
+  createdAt: string;
+}
+
+export interface CoachAction {
+  toolCallId: string;
+  name: string;
+  status: 'completed';
+  result: unknown;
+}
+
+export interface CoachTurnResponse {
+  message: CoachMessage;
+  actions: CoachAction[];
+}
+
+export interface CoachProviderErrorPayload {
+  error?: { code?: string; message?: string };
+  completedActions?: CoachAction[];
+}
