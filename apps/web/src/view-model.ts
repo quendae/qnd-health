@@ -41,19 +41,26 @@ export interface NutritionMacroCard {
   percent: number | null;
 }
 
+export interface NutritionMacroGoals {
+  proteinGrams: number | null;
+  carbsGrams: number | null;
+  fatGrams: number | null;
+  fiberGrams: number | null;
+}
+
+function macroPercent(value: number | null, goal: number | null): number | null {
+  return value != null && goal != null && goal > 0 ? Math.round((value / goal) * 100) : null;
+}
+
 export function nutritionMacroCards(
   totals: { proteinGrams: number | null; carbsGrams: number | null; fatGrams: number | null; fiberGrams: number | null },
-  proteinGoal: number | null,
+  goals: NutritionMacroGoals,
 ): NutritionMacroCard[] {
-  const proteinPercent = totals.proteinGrams != null && proteinGoal != null && proteinGoal > 0
-    ? Math.round((totals.proteinGrams / proteinGoal) * 100)
-    : null;
-
   return [
-    { label: 'Białko', value: totals.proteinGrams, goal: proteinGoal, percent: proteinPercent },
-    { label: 'Węglowodany', value: totals.carbsGrams, goal: null, percent: null },
-    { label: 'Tłuszcz', value: totals.fatGrams, goal: null, percent: null },
-    { label: 'Błonnik', value: totals.fiberGrams, goal: null, percent: null },
+    { label: 'Białko', value: totals.proteinGrams, goal: goals.proteinGrams, percent: macroPercent(totals.proteinGrams, goals.proteinGrams) },
+    { label: 'Węglowodany', value: totals.carbsGrams, goal: goals.carbsGrams, percent: macroPercent(totals.carbsGrams, goals.carbsGrams) },
+    { label: 'Tłuszcz', value: totals.fatGrams, goal: goals.fatGrams, percent: macroPercent(totals.fatGrams, goals.fatGrams) },
+    { label: 'Błonnik', value: totals.fiberGrams, goal: goals.fiberGrams, percent: macroPercent(totals.fiberGrams, goals.fiberGrams) },
   ];
 }
 
