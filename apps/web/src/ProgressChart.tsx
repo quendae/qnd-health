@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { buildChartSegments, chartExtent } from './insights';
 import type { ProgressSeriesPoint } from './types';
+import './progress-chart.css';
 
 type ValueGetter = (point: ProgressSeriesPoint) => number | null;
 
