@@ -22,4 +22,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm smoke:runtime
-      - run: docker build -t qnd-health-ci .
+      - run: docker build -t qnd-health-api-ci .
+      - run: docker build -f apps/web/Dockerfile -t qnd-health-web-ci .
