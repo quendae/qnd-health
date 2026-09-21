@@ -7,6 +7,7 @@ import {
 import { ApiError, QndHealthApi } from './api';
 import { CustomActivityDialog } from './CustomActivityDialog';
 import { NutritionEntryDialog } from './NutritionEntryDialog';
+import { QuickActivityPresets } from './QuickActivityPresets';
 import { HistoryView } from './HistoryView';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
@@ -48,6 +49,12 @@ function sourceLabel(value: string | undefined | null) {
   return ({ garmin: 'Garmin', hermes: 'Hermes', manual: 'Ręcznie', fit: 'Plik FIT' } as Record<string, string>)[value] ?? value;
 }
 
+function stepGoalLabel(source: TodayResponse['activity']['steps']['goalSource']) {
+  if (source === 'garmin') return 'Cel Garmin';
+  if (source === 'profile') return 'Cel użytkownika';
+  return 'Cel domyślny';
+}
+
 function MetricCard({ icon: Icon, label, value, unit, sub }: { icon: typeof Weight; label: string; value: string; unit?: string; sub?: string }) {
   return <div className="metric-card">
     <span className="metric-icon"><Icon size={18} /></span>
@@ -67,17 +74,32 @@ function Candidate({ candidate, onAttach, busy }: { candidate: ActivityCandidate
   </div>;
 }
 
-function ActivityPanel({ today, mutate, busyId, onAddActivity }: {
+function ActivityPanel({ api, date, today, mutate, busyId, onAddActivity, onError, onReload }: {
+  api: QndHealthApi;
+  date: string;
   today: TodayResponse;
   mutate: (kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) => void;
   busyId: string | null;
   onAddActivity: () => void;
+  onError: (message: string) => void;
+  onReload: () => void | Promise<void>;
 }) {
+  const steps = today.activity.steps;
+  const stepPercent = steps.target > 0 ? Math.min(100, Math.round((steps.current / steps.target) * 100)) : 0;
+  const visibleItems = today.activity.items.filter(item => item.metricKey !== 'steps');
   return <section className="panel activity-panel widget-card">
-    <header><div><h2><Activity /> Aktywność</h2><p>Plan na dziś i postęp wykonania.</p></div><div className="panel-header-actions"><span className="section-link">Dzisiaj</span><button className="ghost compact-action" onClick={onAddActivity}><Plus size={15} /> Dodaj aktywność</button></div></header>
+    <header><div><h2><Activity /> Aktywność</h2><p>Codzienny ruch, szybkie ćwiczenia i plan.</p></div><div className="panel-header-actions"><span className="section-link">Dzisiaj</span><button className="ghost compact-action" onClick={onAddActivity}><Plus size={15} /> Dodaj aktywność</button></div></header>
+    <div className="steps-row">
+      <div className="status-dot metric_auto"><span /></div>
+      <div className="steps-main">
+        <div className="activity-title"><strong>Kroki</strong><span>{stepGoalLabel(steps.goalSource)}</span></div>
+        <div className="activity-progress"><div className="activity-value">{formatMetric(steps.current, 0)} / {formatMetric(steps.target, 0)} kroków</div><ProgressBar value={stepPercent} /><span className="percent">{stepPercent}%</span></div>
+      </div>
+    </div>
+    <QuickActivityPresets api={api} date={date} onCreated={onReload} onError={onError} />
     <div className="activity-list">
-      {today.activity.items.length === 0 && <div className="empty">Brak zaplanowanej aktywności na ten dzień.</div>}
-      {today.activity.items.map((item) => {
+      {visibleItems.length === 0 && <div className="empty">Brak innych zaplanowanych aktywności na ten dzień.</div>}
+      {visibleItems.map((item) => {
         const percent = progressPercent(item.progress.ratio);
         const candidate = item.candidates?.[0];
         return <article className="activity-row" key={item.id}>
@@ -97,7 +119,7 @@ function ActivityPanel({ today, mutate, busyId, onAddActivity }: {
           <div className="activity-actions">
             <span className={`pill ${item.status}`}>{statusLabel(item)}</span>
             {item.completionStrategy === 'count_manual' && <div className="stepper"><button onClick={() => mutate('progress', item, Math.max(0, (item.progress.currentValue ?? 0) - 1))} disabled={busyId === item.id}>−</button><span>{item.progress.currentValue ?? 0}</span><button onClick={() => mutate('progress', item, (item.progress.currentValue ?? 0) + 1)} disabled={busyId === item.id}>+</button></div>}
-            {item.completionStrategy === 'manual' && <button className="ghost tiny" onClick={() => mutate('progress', item, item.status === 'completed' ? 0 : 1)} disabled={busyId === item.id}>{item.status === 'completed' ? 'Cofnij' : 'Wykonane'}</button>}
+            {(item.completionStrategy === 'manual' || item.completionStrategy === 'activity_link') && !item.linkedActivityId && <button className="ghost tiny" onClick={() => mutate('progress', item, item.status === 'completed' ? 0 : 1)} disabled={busyId === item.id}>{item.status === 'completed' ? 'Cofnij' : 'Wykonane'}</button>}
             {item.linkedActivityId && <button className="ghost tiny" onClick={() => mutate('detach', item)} disabled={busyId === item.id}>Odłącz</button>}
           </div>
         </article>;
@@ -230,9 +252,9 @@ export default function App() {
   if (!today && error) return <TokenGate onSave={saveToken} error={error} />;
 
   function renderWidget(id: TodayWidgetId) {
-    if (!today) return null;
+    if (!today || !api) return null;
     if (id === 'health_metrics') return <HealthMetrics today={today} />;
-    if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} />;
+    if (id === 'activity') return <ActivityPanel api={api} date={date} today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} onError={setError} onReload={load} />;
     if (id === 'nutrition') return <NutritionPanel today={today} onEdit={setEditingNutrition} onDelete={(entry) => void deleteNutrition(entry)} deletingId={deletingNutritionId} />;
     if (id === 'week_progress') return <WeekProgress today={today} />;
     if (id === 'remaining_week') return <RemainingWeek today={today} />;
