@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { DeepSeekClient } from './coach/deepseek.js';
 import { createPrismaRepositories, type PrismaClientPort } from './persistence/prisma-repositories.js';
+import { createPrismaMeasurementRepository } from './measurements/prisma-repository.js';
 
 export interface RuntimeAppOptions {
   prisma: PrismaClientPort;
@@ -13,6 +14,7 @@ export interface RuntimeAppOptions {
 
 export function buildRuntimeApp(options: RuntimeAppOptions) {
   const repositories = createPrismaRepositories(options.prisma);
+  const measurementRepository = createPrismaMeasurementRepository(options.prisma);
   const deepseekClient = options.deepseekApiKey
     ? new DeepSeekClient({
       apiKey: options.deepseekApiKey,
@@ -26,5 +28,6 @@ export function buildRuntimeApp(options: RuntimeAppOptions) {
     deepseekClient,
     coachModel: options.deepseekModel ?? 'deepseek-flash',
     ...repositories,
+    measurementRepository,
   });
 }
