@@ -6,6 +6,18 @@
     "test": "pnpm --filter @qnd-health/activity-model build && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
-    "smoke:runtime": "node -e \"Promise.all([import('./apps/api/dist/src/runtime.js'), import('./apps/api/dist/src/generated/prisma/client.js')]).then(() => console.log('runtime smoke ok'))\""
+    "start": "pnpm --filter @qnd-health/api start",
+    "db:init": "pnpm --filter @qnd-health/api prisma:generate && pnpm --filter @qnd-health/api prisma:push",
+    "token:create": "pnpm --filter @qnd-health/api token:create",
+    "smoke:runtime": "node -e \"Promise.all([import('./apps/api/dist/src/runtime.js'), import('./apps/api/dist/src/generated/prisma/client.js'), import('./apps/api/dist/src/persistence/prisma-client.js'), import('./apps/api/dist/src/web/static.js')]).then(() => console.log('runtime smoke ok'))\"",
+    "smoke:native": "sh scripts/native-smoke.sh"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

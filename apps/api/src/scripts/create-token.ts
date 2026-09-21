@@ -1,9 +1,8 @@
 import 'dotenv/config';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { issueApiToken } from '../auth/issue-token.js';
 import { apiScopes, type ApiScope } from '../auth/scopes.js';
 import { loadConfig } from '../config.js';
+import { createPrismaClient, ensureDatabaseDirectory } from '../persistence/prisma-client.js';
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -20,8 +19,8 @@ if (!name || !rawScopes?.length) {
 }
 
 const config = loadConfig();
-const adapter = new PrismaPg({ connectionString: config.databaseUrl });
-const prisma = new PrismaClient({ adapter });
+await ensureDatabaseDirectory(config.databaseUrl);
+const prisma = createPrismaClient(config.databaseUrl);
 
 try {
   const issued = await issueApiToken({
@@ -30,7 +29,14 @@ try {
     pepper: config.tokenPepper,
     repository: {
       async create(input) {
-        return prisma.apiToken.create({ data: input, select: { id: true } });
+        return prisma.apiToken.create({
+          data: {
+            name: input.name,
+            tokenHash: input.tokenHash,
+            scopesJson: JSON.stringify(input.scopes),
+          },
+          select: { id: true },
+        });
       },
     },
   });

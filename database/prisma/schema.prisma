@@ -5,7 +5,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 enum PlanKind {
@@ -47,53 +47,53 @@ enum MealType {
 }
 
 model PlanItem {
-  id                       String             @id @default(uuid())
-  date                     DateTime           @db.Date
-  kind                     PlanKind
-  activityType             String?
-  title                    String
-  completionStrategy       CompletionStrategy
-  metricKey                String?
-  targetValue              Float?
-  currentManualValue       Float?
-  unit                     String?
-  plannedDurationSeconds   Int?
-  plannedDistanceMeters    Float?
-  targetHrMin              Int?
-  targetHrMax              Int?
-  targetZone               String?
+  id                        String             @id @default(uuid())
+  date                      DateTime
+  kind                      PlanKind
+  activityType              String?
+  title                     String
+  completionStrategy        CompletionStrategy
+  metricKey                 String?
+  targetValue               Float?
+  currentManualValue        Float?
+  unit                      String?
+  plannedDurationSeconds    Int?
+  plannedDistanceMeters     Float?
+  targetHrMin               Int?
+  targetHrMax               Int?
+  targetZone                String?
   targetPaceMinSecondsPerKm Int?
   targetPaceMaxSecondsPerKm Int?
-  workoutStructureJson     Json?
-  notes                    String?
-  status                   PlanStatus         @default(planned)
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
-  activityMatch            ActivityMatch?
+  workoutStructureJson      Json?
+  notes                     String?
+  status                    PlanStatus         @default(planned)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  activityMatch             ActivityMatch?
 
   @@index([date])
 }
 
 model CompletedActivity {
-  id                      String          @id @default(uuid())
-  provider                DataSource
-  providerActivityId      String?
-  activityType            String
-  startedAt               DateTime
-  durationSeconds         Int?
-  distanceMeters          Float?
-  avgHr                   Int?
-  maxHr                   Int?
-  avgPaceSecondsPerKm     Int?
-  cadence                 Float?
-  elevationGainMeters     Float?
-  calories                Float?
-  normalizedMetricsJson   Json?
-  sourceFilePath          String?
-  rawProviderDataJson     Json?
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
-  activityMatch           ActivityMatch?
+  id                    String        @id @default(uuid())
+  provider              DataSource
+  providerActivityId    String?
+  activityType          String
+  startedAt             DateTime
+  durationSeconds       Int?
+  distanceMeters        Float?
+  avgHr                 Int?
+  maxHr                 Int?
+  avgPaceSecondsPerKm   Int?
+  cadence               Float?
+  elevationGainMeters   Float?
+  calories              Float?
+  normalizedMetricsJson Json?
+  sourceFilePath        String?
+  rawProviderDataJson   Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  activityMatch         ActivityMatch?
 
   @@unique([provider, providerActivityId])
   @@index([startedAt])
@@ -111,62 +111,62 @@ model ActivityMatch {
 }
 
 model DailyHealth {
-  id                       String     @id @default(uuid())
-  date                     DateTime   @db.Date
-  source                   DataSource
-  steps                    Int?
-  floorsAscended           Float?
-  intensityMinutes         Int?
-  restingHr                Int?
-  hrv                      Float?
-  stress                   Float?
-  bodyBattery              Float?
-  sleepDurationSeconds     Int?
-  sleepStagesJson          Json?
-  respiration              Float?
-  spo2                     Float?
-  calories                 Float?
-  activeCalories           Float?
-  hydrationMl              Float?
-  readinessMetricsJson     Json?
-  rawProviderDataJson      Json?
-  createdAt                DateTime   @default(now())
-  updatedAt                DateTime   @updatedAt
+  id                   String     @id @default(uuid())
+  date                 DateTime
+  source               DataSource
+  steps                Int?
+  floorsAscended       Float?
+  intensityMinutes     Int?
+  restingHr            Int?
+  hrv                  Float?
+  stress               Float?
+  bodyBattery          Float?
+  sleepDurationSeconds Int?
+  sleepStagesJson      Json?
+  respiration          Float?
+  spo2                 Float?
+  calories             Float?
+  activeCalories       Float?
+  hydrationMl          Float?
+  readinessMetricsJson Json?
+  rawProviderDataJson  Json?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
   @@unique([date, source])
   @@index([date])
 }
 
 model BodyMeasurement {
-  id                   String     @id @default(uuid())
-  measuredAt           DateTime
-  source               DataSource
-  weightKg             Float
-  bodyFatPercent       Float?
-  bmi                  Float?
-  muscleMassKg         Float?
-  rawProviderDataJson  Json?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  id                  String     @id @default(uuid())
+  measuredAt          DateTime
+  source              DataSource
+  weightKg            Float
+  bodyFatPercent      Float?
+  bmi                 Float?
+  muscleMassKg        Float?
+  rawProviderDataJson Json?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   @@index([measuredAt])
 }
 
 model NutritionEntry {
-  id             String     @id @default(uuid())
-  consumedAt     DateTime
-  mealType       MealType
-  title          String
-  caloriesKcal   Float?
-  proteinGrams   Float?
-  carbsGrams     Float?
-  fatGrams       Float?
-  fiberGrams     Float?
-  quantityText   String?
-  notes          String?
-  source         DataSource
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id           String     @id @default(uuid())
+  consumedAt   DateTime
+  mealType     MealType
+  title        String
+  caloriesKcal Float?
+  proteinGrams Float?
+  carbsGrams   Float?
+  fatGrams     Float?
+  fiberGrams   Float?
+  quantityText String?
+  notes        String?
+  source       DataSource
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([consumedAt])
 }
@@ -175,7 +175,7 @@ model ApiToken {
   id          String       @id @default(uuid())
   name        String
   tokenHash   String       @unique
-  scopes      String[]
+  scopesJson  String
   lastUsedAt  DateTime?
   revokedAt   DateTime?
   createdAt   DateTime     @default(now())

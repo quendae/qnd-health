@@ -13,6 +13,16 @@ export type PrismaClientPort = any;
 function dateOnly(value: string): Date { return new Date(`${value}T00:00:00.000Z`); }
 function formatDateOnly(value: Date): string { return value.toISOString().slice(0, 10); }
 
+function parseScopes(scopesJson: unknown): string[] {
+  if (typeof scopesJson !== 'string') return [];
+  try {
+    const parsed = JSON.parse(scopesJson);
+    return Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function mapPlan(row: any): StoredPlanItem {
   return {
     id: row.id, date: formatDateOnly(row.date), kind: row.kind, title: row.title,
@@ -151,7 +161,7 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
     async findByHash(tokenHash) {
       const row = await prisma.apiToken.findUnique({ where: { tokenHash } });
       if (!row) return null;
-      return { id: row.id, tokenHash: row.tokenHash, scopes: row.scopes, revokedAt: row.revokedAt ?? null };
+      return { id: row.id, tokenHash: row.tokenHash, scopes: parseScopes(row.scopesJson), revokedAt: row.revokedAt ?? null };
     },
   };
   const auditRepository: AuditRepository = { async record(event) { await prisma.auditEvent.create({ data: event }); } };

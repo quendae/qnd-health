@@ -1,17 +1,19 @@
 import 'dotenv/config';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from './generated/prisma/client.js';
 import { loadConfig } from './config.js';
+import { createPrismaClient, ensureDatabaseDirectory } from './persistence/prisma-client.js';
 import { buildRuntimeApp } from './runtime.js';
+import { registerWebFrontend } from './web/static.js';
 
 const config = loadConfig();
-const adapter = new PrismaPg({ connectionString: config.databaseUrl });
-const prisma = new PrismaClient({ adapter });
+await ensureDatabaseDirectory(config.databaseUrl);
+const prisma = createPrismaClient(config.databaseUrl);
 const app = buildRuntimeApp({
   prisma,
   tokenPepper: config.tokenPepper,
   timeZone: config.timeZone,
 });
+
+await registerWebFrontend(app, config.webDistPath);
 
 app.addHook('onClose', async () => {
   await prisma.$disconnect();

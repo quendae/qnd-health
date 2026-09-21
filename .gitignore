@@ -4,7 +4,14 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.synology.example
 .vite/
 *.log
 .DS_Store
 apps/api/src/generated/prisma/
+data/
+backups/
+logs/
+*.db
+*.db-wal
+*.db-shm

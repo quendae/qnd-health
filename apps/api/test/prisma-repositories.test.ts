@@ -61,10 +61,10 @@ describe('Prisma repository adapters', () => {
     });
   });
 
-  it('loads API tokens by hash without exposing any raw token material', async () => {
+  it('loads API token scopes from the SQLite JSON string without exposing raw token material', async () => {
     const prisma = fakeClient();
     prisma.apiToken.findUnique.mockResolvedValue({
-      id: 'token-1', tokenHash: 'abc', scopes: ['today:read'], revokedAt: null,
+      id: 'token-1', tokenHash: 'abc', scopesJson: '["today:read"]', revokedAt: null,
     });
 
     const repositories = createPrismaRepositories(prisma as any);

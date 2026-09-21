@@ -4,6 +4,7 @@ export interface AppConfig {
   databaseUrl: string;
   tokenPepper: string;
   timeZone: string;
+  webDistPath: string;
 }
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -19,10 +20,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   return {
-    host: env.HOST ?? '0.0.0.0',
+    host: env.HOST?.trim() || '127.0.0.1',
     port,
-    databaseUrl: required(env, 'DATABASE_URL'),
+    databaseUrl: env.DATABASE_URL?.trim() || 'file:./data/qnd-health.db',
     tokenPepper: required(env, 'TOKEN_PEPPER'),
     timeZone: env.TIME_ZONE?.trim() || 'Europe/Warsaw',
+    webDistPath: env.WEB_DIST_PATH?.trim() || 'apps/web/dist',
   };
 }
