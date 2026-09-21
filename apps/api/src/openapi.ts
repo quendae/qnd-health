@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'QND Health API',
-    version: '0.1.0',
+    version: '0.2.0',
     description: 'Private health, planning and nutrition API used by the QND Health web app and Hermes agent.',
   },
   servers: [{ url: 'https://fit.qqnd.fyi', description: 'QND Health production' }],
@@ -21,9 +21,48 @@ export const openApiDocument = {
       CompletedActivity: {
         type: 'object', required: ['id', 'provider', 'activityType', 'startedAt'],
         properties: {
-          id: { type: 'string' }, provider: { type: 'string' }, activityType: { type: 'string' }, startedAt: { type: 'string', format: 'date-time' },
-          durationSeconds: { type: ['integer', 'null'] }, distanceMeters: { type: ['number', 'null'] },
-          avgHr: { type: ['integer', 'null'] }, maxHr: { type: ['integer', 'null'] }, calories: { type: ['number', 'null'] },
+          id: { type: 'string' }, provider: { type: 'string' }, providerActivityId: { type: ['string', 'null'] }, transport: { type: ['string', 'null'] },
+          activityType: { type: 'string' }, startedAt: { type: 'string', format: 'date-time' },
+          durationSeconds: { type: ['integer', 'null'] }, distanceMeters: { type: ['number', 'null'] }, avgHr: { type: ['integer', 'null'] },
+          maxHr: { type: ['integer', 'null'] }, avgPaceSecondsPerKm: { type: ['integer', 'null'] }, cadence: { type: ['number', 'null'] },
+          elevationGainMeters: { type: ['number', 'null'] }, calories: { type: ['number', 'null'] },
+        },
+      },
+      DailyHealthIngest: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['garmin'], default: 'garmin' },
+          transport: { type: 'string', enum: ['home_assistant', 'garmin_api'] },
+          steps: { type: ['integer', 'null'], minimum: 0 }, floorsAscended: { type: ['number', 'null'], minimum: 0 },
+          intensityMinutes: { type: ['integer', 'null'], minimum: 0 }, restingHr: { type: ['integer', 'null'], minimum: 0 },
+          hrv: { type: ['number', 'null'], minimum: 0 }, stress: { type: ['number', 'null'], minimum: 0 },
+          bodyBattery: { type: ['number', 'null'], minimum: 0 }, sleepDurationSeconds: { type: ['integer', 'null'], minimum: 0 },
+          sleepStages: { type: ['object', 'null'], additionalProperties: true }, respiration: { type: ['number', 'null'], minimum: 0 },
+          spo2: { type: ['number', 'null'], minimum: 0 }, calories: { type: ['number', 'null'], minimum: 0 },
+          activeCalories: { type: ['number', 'null'], minimum: 0 }, hydrationMl: { type: ['number', 'null'], minimum: 0 },
+          readiness: { type: ['object', 'null'], additionalProperties: true },
+        },
+      },
+      ActivityImport: {
+        type: 'object', required: ['activityType', 'startedAt'],
+        properties: {
+          transport: { type: 'string', enum: ['home_assistant', 'garmin_api', 'file_import'] },
+          activityType: { type: 'string' }, startedAt: { type: 'string', format: 'date-time' },
+          durationSeconds: { type: ['integer', 'null'], minimum: 0 }, distanceMeters: { type: ['number', 'null'], minimum: 0 },
+          avgHr: { type: ['integer', 'null'], minimum: 0 }, maxHr: { type: ['integer', 'null'], minimum: 0 },
+          avgPaceSecondsPerKm: { type: ['integer', 'null'], minimum: 0 }, cadence: { type: ['number', 'null'], minimum: 0 },
+          elevationGainMeters: { type: ['number', 'null'], minimum: 0 }, calories: { type: ['number', 'null'], minimum: 0 },
+        },
+      },
+      BodyMeasurementInput: {
+        type: 'object', required: ['measuredAt', 'weightKg'],
+        properties: {
+          measuredAt: { type: 'string', format: 'date-time' }, source: { type: 'string', enum: ['garmin', 'hermes', 'manual'] },
+          transport: { type: ['string', 'null'], enum: ['home_assistant', 'garmin_api', null] }, weightKg: { type: 'number', exclusiveMinimum: 0 },
+          bodyFatPercent: { type: ['number', 'null'], minimum: 0 }, bmi: { type: ['number', 'null'], minimum: 0 },
+          muscleMassKg: { type: ['number', 'null'], minimum: 0 }, bodyWaterPercent: { type: ['number', 'null'], minimum: 0 },
+          boneMassKg: { type: ['number', 'null'], minimum: 0 }, visceralFat: { type: ['number', 'null'], minimum: 0 },
+          metabolicAge: { type: ['number', 'null'], minimum: 0 }, physiqueRating: { type: ['number', 'null'], minimum: 0 },
         },
       },
       TodayResponse: {
@@ -75,11 +114,34 @@ export const openApiDocument = {
         responses: { '200': { description: 'Progress aggregate and time series; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
       },
     },
+    '/api/v1/health/daily/{date}': {
+      put: {
+        summary: 'Upsert a Garmin daily-health snapshot, including Home Assistant transported data', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'date', in: 'path', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/DailyHealthIngest' } } } },
+        responses: { '200': { description: 'Daily health snapshot created or updated' }, '422': { description: 'Invalid daily-health payload' } },
+      },
+    },
     '/api/v1/activities': {
       get: {
         summary: 'List imported completed activities for a local calendar day', security: [{ bearerAuth: [] }],
         parameters: [{ name: 'date', in: 'query', required: true, schema: { type: 'string', format: 'date' } }],
         responses: { '200': { description: 'Completed activities from Garmin/FIT/manual providers already stored in QND Health', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/CompletedActivity' } } } } } } }, '422': { description: 'Invalid date' } },
+      },
+    },
+    '/api/v1/activities/{provider}/{providerActivityId}': {
+      put: {
+        summary: 'Idempotently import or update a provider activity', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'provider', in: 'path', required: true, schema: { type: 'string', enum: ['garmin', 'fit'] } },
+          { name: 'providerActivityId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/ActivityImport' } } } },
+        responses: { '200': { description: 'Activity created or updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/CompletedActivity' } } } }, '422': { description: 'Invalid activity payload' } },
       },
     },
     '/api/v1/plans': {
@@ -114,7 +176,12 @@ export const openApiDocument = {
       post: { summary: 'Create a nutrition entry', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created nutrition entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionEntry' } } } }, '409': { description: 'Idempotency key conflict' } } },
     },
     '/api/v1/measurements': {
-      post: { summary: 'Create a body measurement', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created measurement' } } },
+      post: {
+        summary: 'Create a body measurement, optionally preserving Garmin/Home Assistant provenance', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/BodyMeasurementInput' } } } },
+        responses: { '201': { description: 'Created measurement' } },
+      },
     },
   },
 } as const;
