@@ -4,6 +4,9 @@ import type { RequestAuthorizer } from '../auth/service.js';
 import { sendValidationError } from '../http/errors.js';
 import type { NutritionRepository } from './repository.js';
 import { summarizeNutrition } from './summary.js';
+import type { AuditRepository } from '../audit/repository.js';
+import type { IdempotencyRepository } from '../idempotency/repository.js';
+import { executeSafeWrite } from '../writes/safe-write.js';
 
 const timestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp');
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -29,27 +32,50 @@ async function authorize(request: FastifyRequest, authorizer: RequestAuthorizer,
 
 export function registerNutritionRoutes(
   app: FastifyInstance,
-  deps: { authorizer: RequestAuthorizer; nutritionRepository: NutritionRepository },
+  deps: {
+    authorizer: RequestAuthorizer;
+    nutritionRepository: NutritionRepository;
+    auditRepository: AuditRepository;
+    idempotencyRepository: IdempotencyRepository;
+  },
 ): void {
   app.post('/api/v1/nutrition', async (request, reply) => {
-    await authorize(request, deps.authorizer, 'nutrition:write');
+    const actor = await authorize(request, deps.authorizer, 'nutrition:write');
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) return sendValidationError(reply, request, 'Invalid nutrition entry', parsed.error.flatten());
 
-    const created = await deps.nutritionRepository.create({
-      consumedAt: parsed.data.consumedAt,
-      mealType: parsed.data.mealType,
-      title: parsed.data.title,
-      caloriesKcal: parsed.data.caloriesKcal ?? null,
-      proteinGrams: parsed.data.proteinGrams ?? null,
-      carbsGrams: parsed.data.carbsGrams ?? null,
-      fatGrams: parsed.data.fatGrams ?? null,
-      fiberGrams: parsed.data.fiberGrams ?? null,
-      quantityText: parsed.data.quantityText ?? null,
-      notes: parsed.data.notes ?? null,
-      source: 'hermes',
+    return executeSafeWrite({
+      request,
+      reply,
+      tokenId: actor.tokenId,
+      route: 'POST /api/v1/nutrition',
+      requestBody: parsed.data,
+      auditRepository: deps.auditRepository,
+      idempotencyRepository: deps.idempotencyRepository,
+      action: 'nutrition.create',
+      entityType: 'NutritionEntry',
+      perform: async () => {
+        const created = await deps.nutritionRepository.create({
+          consumedAt: parsed.data.consumedAt,
+          mealType: parsed.data.mealType,
+          title: parsed.data.title,
+          caloriesKcal: parsed.data.caloriesKcal ?? null,
+          proteinGrams: parsed.data.proteinGrams ?? null,
+          carbsGrams: parsed.data.carbsGrams ?? null,
+          fatGrams: parsed.data.fatGrams ?? null,
+          fiberGrams: parsed.data.fiberGrams ?? null,
+          quantityText: parsed.data.quantityText ?? null,
+          notes: parsed.data.notes ?? null,
+          source: 'hermes',
+        });
+        return {
+          statusCode: 201,
+          body: created,
+          entityId: created.id,
+          auditSummary: { title: created.title, mealType: created.mealType, consumedAt: created.consumedAt },
+        };
+      },
     });
-    return reply.status(201).send(created);
   });
 
   app.get('/api/v1/nutrition/summary', async (request, reply) => {

@@ -3,6 +3,9 @@ import { z } from 'zod';
 import type { RequestAuthorizer } from '../auth/service.js';
 import { sendValidationError } from '../http/errors.js';
 import type { MeasurementRepository } from './repository.js';
+import type { AuditRepository } from '../audit/repository.js';
+import type { IdempotencyRepository } from '../idempotency/repository.js';
+import { executeSafeWrite } from '../writes/safe-write.js';
 
 const timestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'invalid timestamp');
 const optionalMetric = z.number().nonnegative().nullable().optional();
@@ -21,22 +24,45 @@ async function authorize(request: FastifyRequest, authorizer: RequestAuthorizer,
 
 export function registerMeasurementRoutes(
   app: FastifyInstance,
-  deps: { authorizer: RequestAuthorizer; measurementRepository: MeasurementRepository },
+  deps: {
+    authorizer: RequestAuthorizer;
+    measurementRepository: MeasurementRepository;
+    auditRepository: AuditRepository;
+    idempotencyRepository: IdempotencyRepository;
+  },
 ): void {
   app.post('/api/v1/measurements', async (request, reply) => {
-    await authorize(request, deps.authorizer, 'measurements:write');
+    const actor = await authorize(request, deps.authorizer, 'measurements:write');
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) return sendValidationError(reply, request, 'Invalid body measurement', parsed.error.flatten());
 
-    const created = await deps.measurementRepository.create({
-      measuredAt: parsed.data.measuredAt,
-      weightKg: parsed.data.weightKg,
-      bodyFatPercent: parsed.data.bodyFatPercent ?? null,
-      bmi: parsed.data.bmi ?? null,
-      muscleMassKg: parsed.data.muscleMassKg ?? null,
-      source: 'hermes',
+    return executeSafeWrite({
+      request,
+      reply,
+      tokenId: actor.tokenId,
+      route: 'POST /api/v1/measurements',
+      requestBody: parsed.data,
+      auditRepository: deps.auditRepository,
+      idempotencyRepository: deps.idempotencyRepository,
+      action: 'measurement.create',
+      entityType: 'BodyMeasurement',
+      perform: async () => {
+        const created = await deps.measurementRepository.create({
+          measuredAt: parsed.data.measuredAt,
+          weightKg: parsed.data.weightKg,
+          bodyFatPercent: parsed.data.bodyFatPercent ?? null,
+          bmi: parsed.data.bmi ?? null,
+          muscleMassKg: parsed.data.muscleMassKg ?? null,
+          source: 'hermes',
+        });
+        return {
+          statusCode: 201,
+          body: created,
+          entityId: created.id,
+          auditSummary: { measuredAt: created.measuredAt, source: created.source },
+        };
+      },
     });
-    return reply.status(201).send(created);
   });
 
   app.get('/api/v1/measurements', async (request, reply) => {
