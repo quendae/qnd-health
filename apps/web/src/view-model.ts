@@ -34,6 +34,33 @@ export function weekCompletion(today: TodayResponse): number {
   return Math.round(((today.weekToDate.completed + today.weekToDate.partial * 0.5) / today.weekToDate.totalPlanItems) * 100);
 }
 
+export interface NutritionMacroCard {
+  label: 'Białko' | 'Węglowodany' | 'Tłuszcz' | 'Błonnik';
+  value: number | null;
+  goal: number | null;
+  percent: number | null;
+}
+
+export function nutritionMacroCards(
+  totals: { proteinGrams: number | null; carbsGrams: number | null; fatGrams: number | null; fiberGrams: number | null },
+  proteinGoal: number | null,
+): NutritionMacroCard[] {
+  const proteinPercent = totals.proteinGrams != null && proteinGoal != null && proteinGoal > 0
+    ? Math.round((totals.proteinGrams / proteinGoal) * 100)
+    : null;
+
+  return [
+    { label: 'Białko', value: totals.proteinGrams, goal: proteinGoal, percent: proteinPercent },
+    { label: 'Węglowodany', value: totals.carbsGrams, goal: null, percent: null },
+    { label: 'Tłuszcz', value: totals.fatGrams, goal: null, percent: null },
+    { label: 'Błonnik', value: totals.fiberGrams, goal: null, percent: null },
+  ];
+}
+
+export function nutritionMealListClass(entryCount: number): string {
+  return entryCount > 7 ? 'meal-list scrollable' : 'meal-list';
+}
+
 export function greeting(now = new Date()): string {
   const hour = Number(new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', hour: '2-digit', hour12: false }).format(now));
   if (hour < 12) return 'Dzień dobry';
