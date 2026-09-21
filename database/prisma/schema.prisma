@@ -124,7 +124,7 @@ model DailyHealth {
   providerBmrKcal      Float?
   intensityMinutes     Int?
   restingHr            Int?
-  hrv                   Float?
+  hrv                  Float?
   stress               Float?
   bodyBattery          Float?
   sleepDurationSeconds Int?
@@ -172,6 +172,7 @@ model HealthProfile {
   activityFactor        Float    @default(1.2)
   defaultStepsGoal      Int      @default(7500)
   dailyCaloriesGoalKcal Int?
+  dailyProteinGoalGrams Int?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
@@ -292,6 +293,8 @@ model CoachConversation {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   messages  CoachMessage[]
+
+  @@index([updatedAt])
 }
 
 model CoachMessage {
