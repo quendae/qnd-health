@@ -81,6 +81,7 @@ export interface HealthProfile {
   heightCm: number | null;
   activityFactor: number;
   defaultStepsGoal: number;
+  dailyCaloriesGoalKcal: number | null;
 }
 
 export interface EnergyEstimate {
@@ -121,7 +122,7 @@ export interface TodayResponse {
     steps: { current: number; target: number; goalSource: 'garmin' | 'profile' | 'fallback' };
     items: PlanItem[];
   };
-  nutrition: { entries: NutritionEntry[]; summary: NutritionSummary };
+  nutrition: { entries: NutritionEntry[]; summary: NutritionSummary; goalKcal: number | null };
   weekToDate: { totalPlanItems: number; completed: number; partial: number; planned: number };
   remainingWeek: Omit<PlanItem, 'progress' | 'candidates'>[];
 }
@@ -143,10 +144,14 @@ export interface HistoryResponse {
 export interface ProgressSeriesPoint {
   date: string;
   steps: number | null;
+  stepsGoal: number | null;
   restingHr: number | null;
   hrv: number | null;
   bodyBattery: number | null;
   sleepDurationSeconds: number | null;
+  vo2Max: number | null;
+  caloriesKcal: number | null;
+  caloriesGoalKcal: number | null;
   weightKg: number | null;
   activitiesCount: number;
   activityDurationSeconds: number;
