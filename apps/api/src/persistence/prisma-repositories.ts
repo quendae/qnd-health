@@ -33,13 +33,18 @@ function mapPlan(row: any): StoredPlanItem {
     unit: row.unit ?? null, status: row.status, activityType: row.activityType ?? null,
     plannedDurationSeconds: row.plannedDurationSeconds ?? null,
     plannedDistanceMeters: row.plannedDistanceMeters ?? null,
+    workoutStructure: row.workoutStructureJson ?? null,
     linkedActivityId: row.activityMatch?.completedActivityId ?? null,
   };
 }
 
 function planData(input: NewStoredPlanItem | Partial<StoredPlanItem>) {
-  const { id: _id, linkedActivityId: _linkedActivityId, date, ...rest } = input as Partial<StoredPlanItem>;
-  return { ...rest, ...(date !== undefined ? { date: dateOnly(date) } : {}) };
+  const { id: _id, linkedActivityId: _linkedActivityId, date, workoutStructure, ...rest } = input as Partial<StoredPlanItem>;
+  return {
+    ...rest,
+    ...(date !== undefined ? { date: dateOnly(date) } : {}),
+    ...(workoutStructure !== undefined ? { workoutStructureJson: workoutStructure } : {}),
+  };
 }
 
 function mapNutrition(row: any): NutritionRecord {
@@ -77,6 +82,7 @@ function mapProfile(row: any): HealthProfileRecord {
     activityFactor: row.activityFactor,
     defaultStepsGoal: row.defaultStepsGoal,
     dailyCaloriesGoalKcal: row.dailyCaloriesGoalKcal ?? null,
+    dailyProteinGoalGrams: row.dailyProteinGoalGrams ?? null,
   };
 }
 
