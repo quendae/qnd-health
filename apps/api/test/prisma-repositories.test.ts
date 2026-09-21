@@ -12,6 +12,8 @@ function fakeClient() {
     bodyMeasurement: { create: vi.fn(), findMany: vi.fn() },
     dailyHealth: { findFirst: vi.fn(), findMany: vi.fn() },
     completedActivity: { findMany: vi.fn() },
+    coachConversation: { create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    coachMessage: { create: vi.fn(), findMany: vi.fn() },
     apiToken: { findUnique: vi.fn() },
     auditEvent: { create: vi.fn() },
     idempotencyRecord: { findUnique: vi.fn(), upsert: vi.fn() },
@@ -58,6 +60,23 @@ describe('Prisma repository adapters', () => {
 
     expect(items[0]).toMatchObject({
       consumedAt: '2026-09-21T06:00:00.000Z', carbsGrams: null, fiberGrams: null, source: 'hermes',
+    });
+  });
+
+  it('touches the Coach conversation when a new message is persisted so recency sorting stays correct', async () => {
+    const prisma = fakeClient();
+    prisma.coachMessage.create.mockResolvedValue({
+      id: 'm1', conversationId: 'c1', role: 'user', content: 'Cześć', model: null, toolMetadata: null,
+      createdAt: new Date('2026-09-21T18:20:00.000Z'),
+    });
+    prisma.coachConversation.update.mockResolvedValue({});
+
+    const repositories = createPrismaRepositories(prisma as any);
+    await repositories.coachRepository.addMessage({ conversationId: 'c1', role: 'user', content: 'Cześć' });
+
+    expect(prisma.coachConversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { updatedAt: expect.any(Date) },
     });
   });
 
