@@ -4,7 +4,7 @@
 
 **Goal:** Make profile goals historically versioned by effective date, expose carbs/fat/fiber targets, give Coach authoritative demographic/goal context and date-aware mutation tools, refresh the UI after Coach changes, add a cached daily Coach review, and ship a branded favicon without changing the existing single-user deployment model.
 
-**Architecture:** Add a dedicated `ProfileGoalRevision` snapshot stream and one resolver service used by Profile, Today, Progress and Coach. Keep `HealthProfile` for demographic data and deprecated compatibility values, while all date-sensitive reads resolve through the new service. The frontend continues using the existing API client, but Settings and Coach refresh paths become revision-aware; daily Coach review is a separate read-only cached flow over deterministic stats plus DeepSeek text.
+**Architecture:** Add a dedicated `ProfileGoalRevision` snapshot stream and one resolver service used by Profile, Today, History, Progress and Coach. Keep `HealthProfile` for demographic data and deprecated compatibility values, while all date-sensitive reads resolve through the new service. The frontend continues using the existing API client, but Settings and Coach refresh paths become revision-aware; daily Coach review is a separate read-only cached flow over deterministic stats plus DeepSeek text.
 
 **Tech Stack:** TypeScript, Fastify 5, Prisma 7 + SQLite, React + Vite, Vitest, existing DeepSeek client, existing `update.sh` deployment flow.
 
@@ -25,11 +25,11 @@
 
 ## Review Focus
 
-1. **Future-dated goal revisions** — a revision effective tomorrow must not affect Today, History, Progress or Coach context until tomorrow; pin in Tasks 1, 3 and 4.
-2. **Two revisions on the same day** — latest `createdAt`, then `id`, must win deterministically; pin in Task 1.
-3. **Partial goal patches containing `null`** — nullable macro goals must clear only the supplied field while copying all other active values; pin in Tasks 1 and 3.
-4. **Coach mutation succeeds but DeepSeek final response fails** — the persisted goal revision must remain, UI refresh must happen from `completedActions`, and no rollback is attempted; pin in Tasks 5 and 6.
-5. **Daily summary provider unavailable** — Today must still render deterministic stats and a local fallback review without Body Battery; pin in Task 7.
+1. **Future-dated goal revisions** — a revision effective tomorrow must not affect Today, History, Progress or Coach context until tomorrow; covered in Tasks 1, 3 and 4.
+2. **Two revisions on the same day** — latest `createdAt`, then `id`, must win deterministically; covered in Task 1.
+3. **Partial goal patches containing `null`** — nullable macro goals must clear only the supplied field while copying all other active values; covered in Tasks 1 and 3.
+4. **Coach mutation succeeds but DeepSeek final response fails** — the persisted goal revision remains, UI refresh runs from `completedActions`, and no rollback occurs; covered in Tasks 5 and 6.
+5. **Daily summary provider unavailable** — Today still renders deterministic stats and a local fallback review without Body Battery; covered in Task 7.
 
 ---
 
@@ -43,24 +43,20 @@
 - Modify: `apps/api/src/persistence/prisma-repositories.ts`
 
 **Interfaces:**
-- Produces:
-  - `ProfileGoalValues`
-  - `ProfileGoalRevisionRecord`
-  - `ProfileGoalRevisionRepository`
-  - `ProfileGoalService.resolve(date)`
-  - `ProfileGoalService.createRevision(patch, metadata)`
-  - `ProfileGoalService.listRevisions()`
+- Produces `ProfileGoalValues`, `ProfileGoalRevisionRecord`, `ProfileGoalRevisionRepository`, `ResolvedProfileGoals`, `ProfileGoalService.resolve(date)`, `ProfileGoalService.createRevision(patch, metadata)`, `ProfileGoalService.listRevisions()`.
 - Consumes existing `HealthProfileRepository` only as fallback when no revision exists.
 
-- [ ] **Step 1: Write failing resolver tests**
+- [ ] **Step 1: Write the failing resolver tests with complete in-memory fixtures**
 
-Create `apps/api/test/profile-goals.test.ts` with focused in-memory repository fixtures:
+Create `apps/api/test/profile-goals.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
 import { ProfileGoalService } from '../src/profile/goals.js';
+import type { ProfileGoalRevisionRecord, ProfileGoalRevisionRepository, ProfileGoalValues } from '../src/profile/goal-repository.js';
+import type { HealthProfileRepository } from '../src/profile/repository.js';
 
-const base = {
+const base: ProfileGoalValues = {
   activityFactor: 1.2,
   defaultStepsGoal: 7500,
   dailyCaloriesGoalKcal: 1600,
@@ -69,6 +65,45 @@ const base = {
   dailyFatGoalGrams: null,
   dailyFiberGoalGrams: null,
 };
+
+function revision(id: string, effectiveFrom: string, createdAt: string, values: ProfileGoalValues): ProfileGoalRevisionRecord {
+  return { id, effectiveFrom, createdAt, source: 'manual', sourceRef: null, reason: null, ...values };
+}
+
+function memoryGoalRepo(initial: ProfileGoalRevisionRecord[]): ProfileGoalRevisionRepository {
+  const rows = [...initial];
+  return {
+    async findActiveOn(date) {
+      return rows
+        .filter(row => row.effectiveFrom <= date)
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0] ?? null;
+    },
+    async list() {
+      return [...rows].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    },
+    async count() { return rows.length; },
+    async create(input) {
+      const row = { ...input, id: `r-${rows.length + 1}`, createdAt: `2026-09-21T2${rows.length}:00:00.000Z` };
+      rows.push(row);
+      return row;
+    },
+  };
+}
+
+function fallbackProfileRepo(values: ProfileGoalValues): HealthProfileRepository {
+  return {
+    async get() {
+      return {
+        id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: null,
+        activityFactor: values.activityFactor,
+        defaultStepsGoal: values.defaultStepsGoal,
+        dailyCaloriesGoalKcal: values.dailyCaloriesGoalKcal,
+        dailyProteinGoalGrams: values.dailyProteinGoalGrams,
+      };
+    },
+    async upsert() { throw new Error('not used'); },
+  };
+}
 
 describe('ProfileGoalService', () => {
   it('keeps older days on the older revision', async () => {
@@ -105,17 +140,15 @@ describe('ProfileGoalService', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
-
-Run:
+- [ ] **Step 2: Run the focused test and verify RED**
 
 ```bash
 pnpm --filter @qnd-health/api test -- profile-goals.test.ts
 ```
 
-Expected: FAIL because `goal-repository.ts` / `goals.ts` do not exist.
+Expected: FAIL because `goal-repository.ts` and `goals.ts` do not exist.
 
-- [ ] **Step 3: Add Prisma model and repository interfaces**
+- [ ] **Step 3: Add the Prisma model and repository interfaces**
 
 Add to `database/prisma/schema.prisma`:
 
@@ -173,39 +206,58 @@ export interface ProfileGoalRevisionRepository {
 
 - [ ] **Step 4: Implement the resolver/service**
 
-Create `apps/api/src/profile/goals.ts` with this public shape:
+Create `apps/api/src/profile/goals.ts` with these exact public methods:
 
 ```ts
+export interface ResolvedProfileGoals extends ProfileGoalValues {
+  revisionId: string | null;
+  effectiveFrom: string | null;
+  source: GoalRevisionSource | 'fallback';
+}
+
 export class ProfileGoalService {
   constructor(
     private readonly revisions: ProfileGoalRevisionRepository,
     private readonly profile: HealthProfileRepository,
   ) {}
 
-  async resolve(date: string): Promise<ResolvedProfileGoals> { /* select active revision, else profile/default fallback */ }
+  async resolve(date: string): Promise<ResolvedProfileGoals> {
+    const revision = await this.revisions.findActiveOn(date);
+    if (revision) return { ...revision, revisionId: revision.id };
+    const profile = await this.profile.get();
+    return {
+      revisionId: null,
+      effectiveFrom: null,
+      source: 'fallback',
+      activityFactor: profile?.activityFactor ?? 1.2,
+      defaultStepsGoal: profile?.defaultStepsGoal ?? 7500,
+      dailyCaloriesGoalKcal: profile?.dailyCaloriesGoalKcal ?? null,
+      dailyProteinGoalGrams: profile?.dailyProteinGoalGrams ?? null,
+      dailyCarbsGoalGrams: null,
+      dailyFatGoalGrams: null,
+      dailyFiberGoalGrams: null,
+    };
+  }
 
   async createRevision(
     patch: Partial<ProfileGoalValues>,
     meta: { effectiveFrom: string; source: GoalRevisionSource; sourceRef: string | null; reason: string | null },
-  ): Promise<ProfileGoalRevisionRecord> { /* copy active snapshot + patch + create */ }
+  ): Promise<ProfileGoalRevisionRecord> {
+    const active = await this.resolve(meta.effectiveFrom);
+    const values: ProfileGoalValues = { ...active, ...patch };
+    validateProfileGoalValues(values);
+    return this.revisions.create({ ...values, ...meta });
+  }
 
-  async listRevisions(): Promise<ProfileGoalRevisionRecord[]> { return this.revisions.list(); }
+  async listRevisions() { return this.revisions.list(); }
 }
 ```
 
-Validation rules in this module:
+`validateProfileGoalValues()` enforces: `activityFactor > 0`, integer `defaultStepsGoal > 0`, and every nutrition goal is integer `> 0` or `null`.
 
-```ts
-activityFactor > 0
-defaultStepsGoal integer > 0
-all macro/calorie goals: integer > 0 or null
-```
+- [ ] **Step 5: Implement the Prisma adapter**
 
-Use `YYYY-MM-DD` strings at the service boundary and canonical UTC midnight `DateTime` only inside the Prisma adapter.
-
-- [ ] **Step 5: Implement Prisma adapter**
-
-Extend `PrismaClientPort` and `createPrismaRepositories()` in `apps/api/src/persistence/prisma-repositories.ts` with `profileGoalRevision` and a `profileGoalRevisionRepository` whose `findActiveOn(date)` executes the equivalent of:
+Extend `PrismaClientPort` and `createPrismaRepositories()` in `apps/api/src/persistence/prisma-repositories.ts` with `profileGoalRevisionRepository`. `findActiveOn(date)` uses:
 
 ```ts
 where: { effectiveFrom: { lte: new Date(`${date}T00:00:00.000Z`) } },
@@ -217,7 +269,7 @@ orderBy: [
 take: 1,
 ```
 
-Convert `effectiveFrom` back to `YYYY-MM-DD` and `createdAt` to ISO strings in repository records.
+Convert `effectiveFrom` back to `YYYY-MM-DD` and `createdAt` to ISO strings.
 
 - [ ] **Step 6: Run focused tests and typecheck**
 
@@ -251,26 +303,26 @@ git commit -m "feat: add versioned profile goal resolver"
 - Consumes `ProfileGoalRevisionRepository`, `HealthProfileRepository`.
 - Produces `backfillProfileGoals(...) => Promise<'created' | 'skipped'>`.
 
-- [ ] **Step 1: Write failing idempotency test**
+- [ ] **Step 1: Write the failing idempotency test**
+
+Use the same explicit `memoryGoalRepo()` fixture pattern from Task 1. The test body is:
 
 ```ts
-it('creates one 1970-01-01 migration revision and never duplicates it', async () => {
-  const revisions = memoryGoalRepo([]);
-  const result1 = await backfillProfileGoals(revisions, fallbackProfileRepo({
-    activityFactor: 1.2,
-    defaultStepsGoal: 7500,
-    dailyCaloriesGoalKcal: 1600,
-    dailyProteinGoalGrams: 180,
-    dailyCarbsGoalGrams: null,
-    dailyFatGoalGrams: null,
-    dailyFiberGoalGrams: null,
-  }));
-  const result2 = await backfillProfileGoals(revisions, fallbackProfileRepo(/* same */));
-  expect(result1).toBe('created');
-  expect(result2).toBe('skipped');
-  expect(await revisions.count()).toBe(1);
-  expect((await revisions.list())[0]).toMatchObject({ effectiveFrom: '1970-01-01', source: 'migration' });
-});
+const values = {
+  activityFactor: 1.2,
+  defaultStepsGoal: 7500,
+  dailyCaloriesGoalKcal: 1600,
+  dailyProteinGoalGrams: 180,
+  dailyCarbsGoalGrams: null,
+  dailyFatGoalGrams: null,
+  dailyFiberGoalGrams: null,
+};
+const revisions = memoryGoalRepo([]);
+const profiles = fallbackProfileRepo(values);
+expect(await backfillProfileGoals(revisions, profiles)).toBe('created');
+expect(await backfillProfileGoals(revisions, profiles)).toBe('skipped');
+expect(await revisions.count()).toBe(1);
+expect((await revisions.list())[0]).toMatchObject({ effectiveFrom: '1970-01-01', source: 'migration' });
 ```
 
 - [ ] **Step 2: Verify RED**
@@ -283,7 +335,7 @@ Expected: FAIL because backfill module does not exist.
 
 - [ ] **Step 3: Implement backfill function and CLI**
 
-`backfillProfileGoals()` must:
+`backfillProfileGoals()`:
 
 ```ts
 if (await revisions.count() > 0) return 'skipped';
@@ -304,7 +356,7 @@ await revisions.create({
 return 'created';
 ```
 
-The CLI in `apps/api/src/scripts/backfill-profile-goals.ts` must open the same Prisma/SQLite runtime used by the app, call this function, print the result, and always disconnect.
+`apps/api/src/scripts/backfill-profile-goals.ts` opens the same Prisma client used by the runtime, creates repositories with `createPrismaRepositories`, calls the function, prints `created`/`skipped`, and disconnects in `finally`.
 
 - [ ] **Step 4: Add package script**
 
@@ -315,8 +367,6 @@ In `apps/api/package.json`:
 ```
 
 - [ ] **Step 5: Wire `update.sh` after `prisma:push` and before restart**
-
-Add:
 
 ```bash
 echo "==> Backfilling versioned profile goals"
@@ -358,15 +408,11 @@ git commit -m "feat: backfill versioned goals during updates"
 
 **Interfaces:**
 - Consumes `ProfileGoalService` from Task 1.
-- Produces:
-  - `GET /api/v1/profile/goals?date=YYYY-MM-DD`
-  - `GET /api/v1/profile/goals/history`
-  - `PATCH /api/v1/profile/goals`
-  - backward-compatible `GET/PATCH /api/v1/profile`.
+- Produces `GET /api/v1/profile/goals?date=YYYY-MM-DD`, `GET /api/v1/profile/goals/history`, `PATCH /api/v1/profile/goals`, and backward-compatible `GET/PATCH /api/v1/profile`.
 
 - [ ] **Step 1: Add RED API tests**
 
-Cover all of these in `profile-goals-api.test.ts`:
+In `profile-goals-api.test.ts`, assert:
 
 ```ts
 expect((await getGoals('2026-09-21')).dailyCaloriesGoalKcal).toBe(1600);
@@ -386,7 +432,7 @@ expect(cleared.dailyCarbsGoalGrams).toBeNull();
 expect(cleared.dailyFatGoalGrams).toBe(60);
 ```
 
-Also extend `profile-api.test.ts` so one PATCH containing demographics + versioned goals updates demographics directly and creates exactly one revision effective today.
+Extend `profile-api.test.ts`: one PATCH containing `heightCm` plus `dailyCaloriesGoalKcal` updates the demographic row and creates exactly one goal revision effective today.
 
 - [ ] **Step 2: Verify RED**
 
@@ -394,11 +440,9 @@ Also extend `profile-api.test.ts` so one PATCH containing demographics + version
 pnpm --filter @qnd-health/api test -- profile-goals-api.test.ts profile-api.test.ts
 ```
 
-Expected: FAIL on missing routes/service wiring and missing new macro fields.
+Expected: FAIL on missing routes/service wiring and new macro fields.
 
 - [ ] **Step 3: Split profile validation into demographic and goal schemas**
-
-Use these explicit shapes in `profile/routes.ts`:
 
 ```ts
 const demographicPatch = z.object({
@@ -420,26 +464,32 @@ const goalPatch = z.object({
 });
 ```
 
-`PATCH /profile` must split the body: demographic keys go to `HealthProfileRepository.upsert`; versioned keys go once to `ProfileGoalService.createRevision(... effective today, source='manual')`.
+`PATCH /profile` splits the body: demographic keys go to `HealthProfileRepository.upsert`; any versioned keys create exactly one revision with `effectiveFrom=localToday`, `source='manual'`.
 
-- [ ] **Step 4: Implement goal routes and history**
+- [ ] **Step 4: Implement goal routes and compatibility response**
 
-Return resolved goals including:
+Resolved goal responses include:
 
 ```ts
 {
   revisionId,
   effectiveFrom,
   source,
-  ...ProfileGoalValues
+  activityFactor,
+  defaultStepsGoal,
+  dailyCaloriesGoalKcal,
+  dailyProteinGoalGrams,
+  dailyCarbsGoalGrams,
+  dailyFatGoalGrams,
+  dailyFiberGoalGrams,
 }
 ```
 
-`GET /profile` returns demographic fields plus today's resolved goal values as flat compatibility fields.
+`GET /profile` returns demographic fields plus today's resolved goal values as flat compatibility fields and current revision metadata.
 
-- [ ] **Step 5: Wire service through `app.ts` and `runtime.ts`**
+- [ ] **Step 5: Wire one goal service through `app.ts` and `runtime.ts`**
 
-`buildApp()` receives `profileGoalRevisionRepository` and constructs/uses one `ProfileGoalService` instance for profile/Today/insights/Coach registration rather than each route creating its own resolver.
+`buildApp()` receives `profileGoalRevisionRepository`, creates one `ProfileGoalService`, and passes it into Profile, Today, Insights and Coach route registrations. No route creates its own resolver.
 
 - [ ] **Step 6: Verify**
 
@@ -471,26 +521,34 @@ git commit -m "feat: expose date-aware profile goal API"
 
 **Interfaces:**
 - Consumes `ProfileGoalService.resolve(date)`.
-- Produces date-correct nutrition/macro goal fields in Today and date-correct goal series in Progress.
+- Produces date-correct goal fields in Today, History and Progress.
 
 - [ ] **Step 1: Add RED tests for historical resolution**
 
-Add a Today test where:
+Today:
 
 ```ts
-// 2026-09-21 active goal = 1600 kcal; 2026-09-22 active goal = 1900 kcal
 expect((await getToday('2026-09-21')).nutrition.goals.caloriesKcal).toBe(1600);
 expect((await getToday('2026-09-22')).nutrition.goals.caloriesKcal).toBe(1900);
+expect((await getToday('2026-09-21')).energy.activityFactor).toBe(1.2);
+expect((await getToday('2026-09-22')).energy.activityFactor).toBe(1.3);
 ```
 
-Add Garmin precedence:
+Garmin precedence:
 
 ```ts
-expect(today.activity.steps.target).toBe(9000); // Garmin day goal
+expect(today.activity.steps.target).toBe(9000);
 expect(today.activity.steps.goalSource).toBe('garmin');
 ```
 
-Add Progress assertions:
+History:
+
+```ts
+expect(history.days.find(day => day.date === '2026-09-21')?.goals.dailyCaloriesGoalKcal).toBe(1600);
+expect(history.days.find(day => day.date === '2026-09-22')?.goals.dailyCaloriesGoalKcal).toBe(1900);
+```
+
+Progress:
 
 ```ts
 expect(series.find(p => p.date === '2026-09-21')).toMatchObject({
@@ -509,7 +567,7 @@ expect(series.find(p => p.date === '2026-09-22')?.caloriesGoalKcal).toBe(1900);
 pnpm --filter @qnd-health/api test -- today-api.test.ts history-progress-api.test.ts
 ```
 
-Expected: FAIL because current routes use current-profile values or static goals.
+Expected: FAIL because current routes use current-profile values.
 
 - [ ] **Step 3: Refactor Today to resolve selected-date goals once**
 
@@ -530,27 +588,27 @@ nutrition: {
     fatGrams: goals.dailyFatGoalGrams,
     fiberGrams: goals.dailyFiberGoalGrams,
   },
-  ...
+  ...existingNutrition,
 }
 ```
 
-Update `resolveStepGoal()` to receive the resolved default step goal rather than a whole profile record:
+Update `resolveStepGoal()` to take `goals.defaultStepsGoal` as the profile target. Historical energy calculation uses `goals.activityFactor`.
+
+- [ ] **Step 4: Resolve History/Progress goals for every calendar date**
+
+In `insights/routes.ts`:
 
 ```ts
-resolveStepGoal({ garminStepsGoal: health?.stepsGoal, profileStepsGoal: goals.defaultStepsGoal, fallback: 7500 })
+const dates = calendarDays(from, to);
+const resolvedGoals = await Promise.all(dates.map(async date => [date, await deps.profileGoalService.resolve(date)] as const));
+const goalsByDate = new Map(resolvedGoals);
 ```
 
-Historical energy calculation uses `goals.activityFactor`.
+Add `goals` to each History day and use the date's values for every Progress goal series field. Remove use of `data.profile` for step/calorie/protein targets.
 
-- [ ] **Step 4: Resolve Progress goals per calendar date**
+- [ ] **Step 5: Update web response types**
 
-In `insights/routes.ts`, resolve every day in the requested range with `Promise.all(days.map(date => goalService.resolve(date)))`, build a date→goals map, and use it when constructing series points.
-
-Do not use today's goal for all points.
-
-- [ ] **Step 5: Update web types**
-
-In `apps/web/src/types.ts`, define explicit Today goal fields:
+In `apps/web/src/types.ts`, Today nutrition includes:
 
 ```ts
 goals: {
@@ -559,10 +617,10 @@ goals: {
   carbsGrams: number | null;
   fatGrams: number | null;
   fiberGrams: number | null;
-}
+};
 ```
 
-and Progress point goal fields for all five nutrition targets plus `stepsGoal`.
+History day gets a `goals` snapshot; Progress series gets all five nutrition goals plus `stepsGoal`.
 
 - [ ] **Step 6: Verify**
 
@@ -577,7 +635,7 @@ Expected: PASS.
 
 ```bash
 git add apps/api/src/today apps/api/src/insights apps/api/test/today-api.test.ts apps/api/test/history-progress-api.test.ts apps/web/src/types.ts
-git commit -m "feat: resolve historical goals in today and progress"
+git commit -m "feat: resolve historical goals in today and insights"
 ```
 
 ---
@@ -595,11 +653,11 @@ git commit -m "feat: resolve historical goals in today and progress"
 
 **Interfaces:**
 - Consumes `ProfileGoalService`.
-- Produces explicit `update_goals` tool and demographic-only `update_profile`.
+- Produces explicit `update_goals` and demographic-only `update_profile`.
 
 - [ ] **Step 1: Add RED context test for saved DOB and age**
 
-For `date='2026-09-21'` and `dateOfBirth='1987-12-12'` assert:
+For context date `2026-09-21` and DOB `1987-12-12`:
 
 ```ts
 expect(context.profile).toMatchObject({
@@ -619,9 +677,7 @@ expect(context.goals).toMatchObject({
 });
 ```
 
-Assert serialized context excludes Body Battery from the homepage-summary-specific input; normal chat context may retain it only as non-primary raw health context until Task 7 removes it from summary generation.
-
-- [ ] **Step 2: Add RED tool schema test**
+- [ ] **Step 2: Add RED tool schema/execution tests**
 
 ```ts
 const updateGoals = coachTools.find(tool => tool.function.name === 'update_goals');
@@ -637,7 +693,7 @@ expect(updateGoals?.function.parameters.properties).toMatchObject({
 });
 ```
 
-Add execution test:
+Execution assertion:
 
 ```ts
 const result = await executeCoachTool('update_goals', {
@@ -656,25 +712,25 @@ pnpm --filter @qnd-health/api test -- coach-context.test.ts coach-tools.test.ts 
 
 Expected: FAIL because DOB/age are omitted and `update_goals` is absent.
 
-- [ ] **Step 4: Update context builder and age calculation**
-
-Add:
+- [ ] **Step 4: Update context builder with a correct age calculation**
 
 ```ts
 function ageOn(dateOfBirth: string, date: string): number {
-  const birth = new Date(`${dateOfBirth}T12:00:00Z`);
-  const on = new Date(`${date}T12:00:00Z`);
+  const birth = new Date(`${dateOfBirth}T12:00:00.000Z`);
+  const on = new Date(`${date}T12:00:00.000Z`);
   let age = on.getUTCFullYear() - birth.getUTCFullYear();
-  if ([on.getUTCMonth(), on.getUTCDate()].join('-') < [birth.getUTCMonth(), birth.getUTCDate()].join('-')) age -= 1;
+  const beforeBirthday = on.getUTCMonth() < birth.getUTCMonth()
+    || (on.getUTCMonth() === birth.getUTCMonth() && on.getUTCDate() < birth.getUTCDate());
+  if (beforeBirthday) age -= 1;
   return age;
 }
 ```
 
-Expose DOB + age + resolved goals as authoritative context values.
+Expose `dateOfBirth`, `ageYears`, `sexForBmr`, `heightCm` and all resolved goals as authoritative context values.
 
 - [ ] **Step 5: Split Coach tools**
 
-`update_profile` JSON schema explicitly exposes only:
+`update_profile` exposes only:
 
 ```ts
 { dateOfBirth, sexForBmr, heightCm }
@@ -691,7 +747,7 @@ profileGoalService.createRevision(patch, {
 });
 ```
 
-Keep `set_default_step_goal` only as a compatibility alias that creates a goal revision effective today.
+Keep `set_default_step_goal` as a compatibility alias that creates a revision effective today.
 
 - [ ] **Step 6: Strengthen prompt wording**
 
@@ -725,21 +781,21 @@ git commit -m "feat: make coach profile context and goals authoritative"
 - Modify: `apps/web/src/types.ts`
 - Modify: `apps/web/src/api.ts`
 - Modify: `apps/web/src/profile-settings.ts`
+- Modify: `apps/web/src/profile-settings.test.ts`
 - Modify: `apps/web/src/ProfileSettings.tsx`
 - Modify: `apps/web/src/CoachView.tsx`
+- Modify: `apps/web/src/CoachView.test.tsx`
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/SettingsView.tsx`
 - Modify: `apps/web/src/features.css`
-- Modify: `apps/web/src/ProfileSettings.test.tsx` if present; otherwise create `apps/web/src/profile-settings.test.ts`
-- Modify: `apps/web/src/CoachView.test.tsx`
 
 **Interfaces:**
 - Consumes new Profile/Goals API and Today goal fields.
 - Produces visible macro targets, effective-date copy and `onDataMutated()` refresh flow.
 
-- [ ] **Step 1: Add RED form serialization test**
+- [ ] **Step 1: Add RED form serialization tests**
 
-Extend the profile form state with:
+Extend `ProfileFormState` with:
 
 ```ts
 dailyCarbsGoalGrams: string;
@@ -747,22 +803,30 @@ dailyFatGoalGrams: string;
 dailyFiberGoalGrams: string;
 ```
 
-Test:
+In `profile-settings.test.ts`:
 
 ```ts
-expect(buildGoalPatch({ ...defaults, dailyCarbsGoalGrams: '150', dailyFatGoalGrams: '60', dailyFiberGoalGrams: '30' }))
-  .toMatchObject({ dailyCarbsGoalGrams: 150, dailyFatGoalGrams: 60, dailyFiberGoalGrams: 30 });
+expect(buildGoalPatch({
+  ...profileFormDefaults(null),
+  dailyCarbsGoalGrams: '150',
+  dailyFatGoalGrams: '60',
+  dailyFiberGoalGrams: '30',
+})).toMatchObject({
+  dailyCarbsGoalGrams: 150,
+  dailyFatGoalGrams: 60,
+  dailyFiberGoalGrams: 30,
+});
 ```
 
-- [ ] **Step 2: Add RED Coach refresh test**
+- [ ] **Step 2: Add RED Coach refresh tests**
 
-In `CoachView.test.tsx`, render with `onDataMutated={spy}` and a mocked send response containing a completed mutating action:
+In `CoachView.test.tsx`, render with `onDataMutated={spy}`. For a successful response containing:
 
 ```ts
 { actions: [{ name: 'update_goals', status: 'completed', result: {} }] }
 ```
 
-Assert `spy` is called once. Repeat with a simulated `502` carrying `completedActions: [{ name: 'update_goals', ... }]`; assert it is still called once because the mutation succeeded before provider failure.
+assert `spy` is called once. Repeat with a simulated `502` body containing `completedActions: [{ name: 'update_goals', status: 'completed', result: {} }]`; assert it is still called once because the mutation already succeeded.
 
 - [ ] **Step 3: Verify RED**
 
@@ -782,11 +846,11 @@ updateGoals(patch: GoalPatch): Promise<ResolvedProfileGoals>
 getGoalHistory(): Promise<ProfileGoalRevision[]>
 ```
 
-Extend `HealthProfile` response type with current resolved macro fields and revision metadata.
+Extend `HealthProfile` with resolved macro fields and revision metadata.
 
 - [ ] **Step 5: Split ProfileSettings UI into profile data and current goals**
 
-Render:
+Render two visual groups:
 
 ```text
 Dane profilu
@@ -802,14 +866,14 @@ Aktualne cele
 - węglowodany
 - tłuszcz
 - błonnik
-Obowiązuje od DD.MM.YYYY
+- "Obowiązuje od DD.MM.YYYY"
 ```
 
-Saving demographic changes uses `updateProfile`; saving goals uses `updateGoals({ effectiveFrom: today, ... })`. One Save button may submit both sequentially, but it must create at most one goal revision.
+Saving demographics uses `updateProfile`; saving goal values uses one `updateGoals({ effectiveFrom: today, ... })` request. A single user click may call both endpoints, but must create at most one goal revision.
 
 - [ ] **Step 6: Update Today macro cards**
 
-In `App.tsx`, render Protein/Carbs/Fat/Fiber consistently:
+Use one compact renderer for Protein/Carbs/Fat/Fiber:
 
 ```tsx
 <MacroMetric value={totals.carbsGrams} goal={today.nutrition.goals.carbsGrams} unit="g" />
@@ -829,9 +893,7 @@ async function handleCoachDataMutated() {
 }
 ```
 
-Pass it to `CoachView`. Pass `profileVersion` to `SettingsView/ProfileSettings` and include it in the profile-loading effect dependency so Settings re-fetches after Coach mutations.
-
-Do not infer new values from model text.
+Pass it to `CoachView`. Pass `profileVersion` to `SettingsView/ProfileSettings` and include it in profile-loading effect dependencies. Do not infer values from model text.
 
 - [ ] **Step 8: Verify**
 
@@ -869,12 +931,12 @@ git commit -m "feat: show versioned macro goals and refresh coach changes"
 
 **Interfaces:**
 - Produces `GET /api/v1/coach/daily-summary?date=YYYY-MM-DD`.
-- Uses `CoachReview` as cache storage keyed by input hash inside `inputJson`.
-- No Coach tools are exposed in this flow.
+- Uses existing `CoachReview` as cache storage keyed by input hash inside `inputJson`.
+- No Coach tools are exposed to DeepSeek in this flow.
 
 - [ ] **Step 1: Write RED backend tests**
 
-Test deterministic stats and Body Battery exclusion:
+Deterministic stats and Body Battery exclusion:
 
 ```ts
 const summary = await service.getDailySummary('2026-09-21');
@@ -883,7 +945,7 @@ expect(summary.stats.calories.percent).toBe(103);
 expect(JSON.stringify(provider.lastInput)).not.toContain('bodyBattery');
 ```
 
-Test provider failure fallback:
+Provider failure fallback:
 
 ```ts
 provider.failNext();
@@ -892,7 +954,7 @@ expect(summary.source).toBe('fallback');
 expect(summary.verdict).toMatch(/kroki|kalorie|plan/i);
 ```
 
-Test unchanged input hash calls provider once across two requests.
+Cache: call twice with unchanged normalized input and assert provider call count is `1`.
 
 - [ ] **Step 2: Verify RED**
 
@@ -917,40 +979,23 @@ export interface DailyCoachReviewCacheRecord {
 
 export interface CoachReviewRepository {
   findDailySummary(date: string, inputHash: string): Promise<DailyCoachReviewCacheRecord | null>;
-  saveDailySummary(input: { date: string; inputHash: string; input: unknown; output: DailyCoachSummaryResponse }): Promise<void>;
+  saveDailySummary(input: { date: string; inputHash: string; normalizedInput: unknown; output: DailyCoachSummaryResponse }): Promise<void>;
 }
 ```
 
-Implement using existing `CoachReview` rows with `reviewType='daily_summary'`, `periodStart=periodEnd=<date>`, and `inputJson={ inputHash, normalizedInput }`.
+Prisma adapter uses `CoachReview` rows with `reviewType='daily_summary'`, `periodStart=periodEnd=<date>`, `inputJson={ inputHash, normalizedInput }`, `outputJson=<response>`, `status='complete'`.
 
 - [ ] **Step 4: Implement deterministic summary input**
 
-`daily-summary.ts` must compute before calling DeepSeek:
+`daily-summary.ts` computes:
 
 ```ts
-activity: {
-  stepsCurrent,
-  stepsTarget,
-  stepsPercent,
-  plannedCount,
-  completedCount,
-}
-calories: {
-  consumedKcal,
-  targetKcal,
-  percent,
-  deltaKcal,
-}
-progress7: {
-  planCompletionPercent,
-  averageSteps,
-  weightDeltaKg,
-}
+activity: { stepsCurrent, stepsTarget, stepsPercent, plannedCount, completedCount },
+calories: { consumedKcal, targetKcal, percent, deltaKcal },
+progress7: { planCompletionPercent, averageSteps, weightDeltaKg },
 ```
 
-Exclude Body Battery entirely.
-
-Hash exactly the normalized deterministic input:
+Do not copy `bodyBattery` into normalized input. Hash exactly:
 
 ```ts
 createHash('sha256').update(JSON.stringify(normalizedInput)).digest('hex')
@@ -958,43 +1003,37 @@ createHash('sha256').update(JSON.stringify(normalizedInput)).digest('hex')
 
 - [ ] **Step 5: Ask DeepSeek for verdict without tools**
 
-Use `deepseekClient.completeTurn({ messages, tools: [] })` with one focused system instruction:
+Call:
 
-```text
-Napisz po polsku bardzo krótką, surową ale sprawiedliwą ocenę dnia na podstawie podanych statystyk. Zwróć 1-2 zdania werdyktu i jedną konkretną sugestię. Nie diagnozuj i nie wspominaj Body Battery.
+```ts
+deepseekClient.completeTurn({
+  tools: [],
+  messages: [
+    { role: 'system', content: 'Napisz po polsku bardzo krótką, surową ale sprawiedliwą ocenę dnia na podstawie statystyk. Zwróć 1-2 zdania werdyktu i jedną konkretną sugestię. Nie diagnozuj i nie wspominaj Body Battery.' },
+    { role: 'user', content: JSON.stringify(normalizedInput) },
+  ],
+});
 ```
 
-If provider throws, generate a deterministic Polish fallback string from steps/calorie/plan percentages.
+If provider throws, generate a deterministic Polish fallback from steps/calorie/plan percentages.
 
 - [ ] **Step 6: Add route**
 
-`GET /api/v1/coach/daily-summary?date=YYYY-MM-DD`:
-- requires `coach:read`,
-- validates date,
-- returns stats + verdict + suggestion + `source: 'deepseek' | 'cache' | 'fallback'`.
+`GET /api/v1/coach/daily-summary?date=YYYY-MM-DD` requires `coach:read`, validates date and returns:
+
+```ts
+{ date, stats, verdict, suggestion, source: 'deepseek' | 'cache' | 'fallback' }
+```
 
 - [ ] **Step 7: Add RED frontend test and component**
 
-`DailyCoachSummary.test.tsx` asserts labels:
+`DailyCoachSummary.test.tsx` asserts labels `Aktywność`, `Kalorie`, `Postęp 7 dni` and absence of `Body Battery`.
 
-```text
-Aktywność
-Kalorie
-Postęp 7 dni
-```
+Component shows three compact evaluation stat cards, one verdict, one action suggestion and a link/button to full Coach view.
 
-and absence of `Body Battery`.
+- [ ] **Step 8: Replace the homepage placeholder**
 
-Component layout: three compact evaluation stat cards, verdict line, one suggestion, link/button to full Coach view.
-
-- [ ] **Step 8: Replace existing homepage Coach placeholder**
-
-In `App.tsx`, fetch daily summary when:
-- selected date changes,
-- Today data refreshes after mutation,
-- Coach widget is visible.
-
-A summary fetch failure must render deterministic local stat fallback rather than hide the widget.
+In `App.tsx`, fetch daily summary when selected date changes, Today refreshes after a mutation, or the Coach widget becomes visible. If summary API fails completely, render a local deterministic stat fallback rather than hiding the widget.
 
 - [ ] **Step 9: Verify**
 
@@ -1020,18 +1059,19 @@ git commit -m "feat: add cached daily coach review"
 
 **Files:**
 - Create: `apps/web/public/favicon.svg`
+- Create: `apps/web/src/app-shell.test.ts`
 - Modify: `apps/web/index.html`
 - Modify: `apps/api/src/openapi.ts`
-- Modify: `.env.example` only if current Coach variables are not already documented
-- Modify: `docs/DEPLOYMENT.md` only where versioned-goal backfill behavior needs documenting
-- Test: existing OpenAPI tests plus a new lightweight favicon assertion in `apps/web/src/app-shell.test.ts` if no equivalent test exists
+- Modify: `apps/api/test/openapi.test.ts`
+- Modify: `docs/DEPLOYMENT.md`
+- Modify: `update.sh`
 
 **Interfaces:**
-- Documents all new routes/types and ships final static asset.
+- Documents all new routes/types and ships the final static asset.
 
 - [ ] **Step 1: Add RED OpenAPI assertions**
 
-Assert the document includes:
+In `apps/api/test/openapi.test.ts`:
 
 ```ts
 expect(doc.paths['/api/v1/profile/goals']).toBeDefined();
@@ -1041,40 +1081,25 @@ expect(doc.components.schemas.ProfileGoalRevision).toBeDefined();
 expect(doc.components.schemas.HealthProfile.properties.dailyCarbsGoalGrams).toBeDefined();
 ```
 
-- [ ] **Step 2: Add favicon asset and HTML link**
+- [ ] **Step 2: Generate favicon visual reference, then implement a simplified SVG asset**
 
-Create `apps/web/public/favicon.svg`:
+Because this is a user-requested image/brand asset, use the image-generation tool first to create the visual reference: square app icon, QND green, rounded health mark, stylized `Q`, short pulse line, no gradients/fine text. Use that reference to implement a favicon that remains legible at 16×16 and 32×32.
 
-```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#187A55"/>
-  <path d="M19 16h15c9 0 16 7 16 16s-7 16-16 16H19V16Zm10 9v14h5c4 0 7-3 7-7s-3-7-7-7h-5Z" fill="#fff"/>
-  <path d="M34 42l6 6" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-  <path d="M8 33h9l3-7 5 14 4-8h7" fill="none" stroke="#DDF3E8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-```
-
-Add to `<head>` in `apps/web/index.html`:
+The committed asset is `apps/web/public/favicon.svg`. Add to `<head>` in `apps/web/index.html`:
 
 ```html
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 ```
 
+Create `apps/web/src/app-shell.test.ts` that reads `apps/web/index.html` and asserts it contains `href="/favicon.svg"`.
+
 - [ ] **Step 3: Update OpenAPI to 0.5.0**
 
-Document:
-- macro goal fields,
-- goal revision metadata,
-- `GET/PATCH /profile/goals`,
-- `/profile/goals/history`,
-- date-correct Today/Progress goal fields,
-- `/coach/daily-summary` response.
+Document macro goal fields, revision metadata, `GET/PATCH /profile/goals`, `/profile/goals/history`, date-correct Today/History/Progress goal fields, and `/coach/daily-summary`. Do not add auth scopes.
 
-Do not add new auth scopes.
+- [ ] **Step 4: Document updater/backfill behavior**
 
-- [ ] **Step 4: Verify deployment docs and updater behavior**
-
-Confirm `update.sh` order is exactly:
+`docs/DEPLOYMENT.md` states the canonical order:
 
 ```text
 git pull
@@ -1089,7 +1114,7 @@ service restart
 health check
 ```
 
-Document that the first deployment creates one `migration` revision effective `1970-01-01`; subsequent deploys are idempotent.
+and that first deploy creates one `migration` revision effective `1970-01-01`; later deploys skip backfill.
 
 - [ ] **Step 5: Run full verification**
 
@@ -1103,22 +1128,26 @@ pnpm smoke:native
 docker build -t qnd-health-ci .
 ```
 
-Expected: all commands exit 0.
+Expected: every command exits `0`.
 
 - [ ] **Step 6: Fresh code review against the spec**
 
-Review the full diff from the pre-plan checkpoint to current HEAD with focus on:
-- no current-profile goal leakage into historical dates,
-- no duplicate same-request revisions,
-- no Body Battery in daily Coach summary,
-- Coach partial-success refresh,
-- idempotent backfill.
+Review the full diff from the pre-plan checkpoint to current HEAD, explicitly checking:
 
-Fix any findings with RED→GREEN before claiming completion.
+```text
+historical dates never read current-profile goals
+one profile save creates at most one goal revision
+Body Battery is absent from daily-summary input/output
+Coach partial-success refreshes authoritative API data
+backfill is idempotent
+future-dated goals do not leak into Today
+```
+
+Any finding gets a new failing test before its fix.
 
 - [ ] **Step 7: Commit final docs/assets**
 
 ```bash
-git add apps/api/src/openapi.ts apps/web/public/favicon.svg apps/web/index.html .env.example docs/DEPLOYMENT.md update.sh
+git add apps/api/src/openapi.ts apps/api/test/openapi.test.ts apps/web/public/favicon.svg apps/web/index.html apps/web/src/app-shell.test.ts docs/DEPLOYMENT.md update.sh
 git commit -m "docs: finalize versioned goals deployment contract"
 ```
