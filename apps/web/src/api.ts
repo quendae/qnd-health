@@ -1,4 +1,4 @@
-import type { CompletedActivity, PlanItem, TodayResponse } from './types';
+import type { CompletedActivity, HistoryResponse, PlanItem, ProgressResponse, TodayResponse } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -51,6 +51,14 @@ export class QndHealthApi {
 
   getToday(date: string) {
     return this.request<TodayResponse>(`/api/v1/today?date=${encodeURIComponent(date)}`);
+  }
+
+  getHistory(from: string, to: string) {
+    return this.request<HistoryResponse>(`/api/v1/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  }
+
+  getProgress(from: string, to: string) {
+    return this.request<ProgressResponse>(`/api/v1/progress?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   }
 
   listPlans(from: string, to: string) {
