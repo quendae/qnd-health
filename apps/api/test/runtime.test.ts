@@ -17,9 +17,11 @@ function fakePrisma() {
     healthProfile: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn() },
     dailyHealth: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     completedActivity: { findMany: vi.fn().mockResolvedValue([]) },
+    coachConversation: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn(), create: vi.fn() },
+    coachMessage: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
     apiToken: {
       findUnique: vi.fn().mockResolvedValue({
-        id: 'web-token', tokenHash: hashApiToken(rawToken, pepper), scopesJson: JSON.stringify(['today:read']), revokedAt: null,
+        id: 'web-token', tokenHash: hashApiToken(rawToken, pepper), scopesJson: JSON.stringify(['today:read', 'coach:read', 'coach:write']), revokedAt: null,
       }),
     },
     auditEvent: { create: vi.fn() },
@@ -52,6 +54,26 @@ describe('buildRuntimeApp', () => {
     expect(prisma.completedActivity.findMany).toHaveBeenCalled();
     expect(prisma.apiToken.findUnique).toHaveBeenCalled();
 
+    await app.close();
+  });
+
+  it('registers persisted Coach conversations even when DeepSeek is not configured yet', async () => {
+    const prisma = fakePrisma();
+    const app = buildRuntimeApp({
+      prisma: prisma as any,
+      tokenPepper: pepper,
+      timeZone: 'Europe/Warsaw',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/coach/conversations',
+      headers: { authorization: `Bearer ${rawToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ conversations: [] });
+    expect(prisma.coachConversation.findMany).toHaveBeenCalled();
     await app.close();
   });
 });
