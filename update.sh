@@ -59,6 +59,15 @@ if ! pnpm --filter @qnd-health/api prisma:push; then
   exit 1
 fi
 
+echo "==> Backfilling versioned profile goals"
+if ! pnpm --filter @qnd-health/api goals:backfill; then
+  echo "ERROR: profile goal backfill failed. Service remains stopped." >&2
+  if [[ -n "$BACKUP_FILE" ]]; then
+    echo "Database backup: $BACKUP_FILE" >&2
+  fi
+  exit 1
+fi
+
 echo "==> Starting $SERVICE_NAME"
 "${SYSTEMCTL[@]}" restart "$SERVICE_NAME"
 
