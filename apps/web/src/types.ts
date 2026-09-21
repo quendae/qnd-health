@@ -46,6 +46,7 @@ export interface DailyHealth {
   date: string;
   source: string;
   steps?: number | null;
+  stepsGoal?: number | null;
   floorsAscended?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
@@ -96,7 +97,10 @@ export interface TodayResponse {
   date: string;
   health: DailyHealth | null;
   latestMeasurement: Measurement | null;
-  activity: { items: PlanItem[] };
+  activity: {
+    steps: { current: number; target: number; goalSource: 'garmin' | 'profile' | 'fallback' };
+    items: PlanItem[];
+  };
   nutrition: { entries: NutritionEntry[]; summary: NutritionSummary };
   weekToDate: { totalPlanItems: number; completed: number; partial: number; planned: number };
   remainingWeek: Omit<PlanItem, 'progress' | 'candidates'>[];
