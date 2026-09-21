@@ -14,8 +14,8 @@ describe('health profile energy calculations', () => {
   });
 
   it('uses Mifflin-St Jeor for male and female BMR estimates', () => {
-    expect(calculateBmr({ dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180 }, 100, '2026-09-21')).toBeCloseTo(1960, 5);
-    expect(calculateBmr({ dateOfBirth: '1990-09-21', sexForBmr: 'female', heightCm: 180 }, 100, '2026-09-21')).toBeCloseTo(1794, 5);
+    expect(calculateBmr({ dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180 }, 100, '2026-09-21')).toBeCloseTo(1950, 5);
+    expect(calculateBmr({ dateOfBirth: '1990-09-21', sexForBmr: 'female', heightCm: 180 }, 100, '2026-09-21')).toBeCloseTo(1784, 5);
   });
 
   it('returns null when BMR inputs are incomplete and validates physical inputs', () => {
