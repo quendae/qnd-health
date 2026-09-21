@@ -9,6 +9,7 @@ import { registerNutritionRoutes } from './nutrition/routes.js';
 import type { MeasurementRepository } from './measurements/repository.js';
 import { registerMeasurementRoutes } from './measurements/routes.js';
 import type { DailyHealthRepository } from './health/repository.js';
+import { registerHealthRoutes } from './health/routes.js';
 import type { CompletedActivityRepository } from './activities/repository.js';
 import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerActivityRoutes } from './activities/routes.js';
@@ -62,7 +63,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       authorizer,
       completedActivityRepository: options.completedActivityRepository,
       timeZone,
+      auditRepository,
+      idempotencyRepository,
     });
+  }
+  if (authorizer && options.dailyHealthRepository) {
+    registerHealthRoutes(app, { authorizer, dailyHealthRepository: options.dailyHealthRepository, auditRepository, idempotencyRepository });
   }
   if (authorizer && options.nutritionRepository) {
     registerNutritionRoutes(app, { authorizer, nutritionRepository: options.nutritionRepository, auditRepository, idempotencyRepository });
