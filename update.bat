@@ -27,7 +27,7 @@ if errorlevel 1 (
 
 echo Updating QND Health on %REMOTE%:%REMOTE_DIR%
 echo.
-ssh "%REMOTE%" "cd %REMOTE_DIR% && chmod +x update.sh && ./update.sh"
+ssh "%REMOTE%" "cd %REMOTE_DIR% && git pull --ff-only && chmod +x update.sh && ./update.sh"
 set "RC=%ERRORLEVEL%"
 
 if not "%RC%"=="0" (
