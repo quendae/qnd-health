@@ -6,7 +6,10 @@ import {
 } from 'lucide-react';
 import { ApiError, QndHealthApi } from './api';
 import { CustomActivityDialog } from './CustomActivityDialog';
+import { HistoryView } from './HistoryView';
 import { Planner } from './Planner';
+import { ProgressView } from './ProgressView';
+import { SettingsView } from './SettingsView';
 import { WidgetSettings } from './WidgetSettings';
 import type { ActivityCandidate, PlanItem, TodayResponse } from './types';
 import { dateLabel, formatDistance, formatDuration, greeting, progressPercent, shortDateLabel, weekCompletion } from './view-model';
@@ -209,12 +212,21 @@ export default function App() {
     return <CoachPanel today={today} />;
   }
 
+  let content = null;
+  if (section === 'planner' && api) content = <Planner api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'history' && api) content = <HistoryView api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'progress' && api) content = <ProgressView api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'settings') content = <SettingsView />;
+  else if (section === 'coach') content = <section className="placeholder panel"><div><h2>Coach</h2><p>Ten obszar podłączymy do DeepSeek po zebraniu wystarczającej historii danych.</p></div></section>;
+  else if (!today) content = <div className="loading-card">Wczytywanie QND Health…</div>;
+  else content = <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>;
+
   return <div className="app-shell">
     <aside className="sidebar"><div className="logo"><div className="logo-symbol">Q</div><div><strong>QND Health</strong><span>Ruch · Odżywianie · Postęp</span></div></div><nav>{navItems.map(([id, label, Icon]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><Icon size={19} /> {label}</button>)}</nav><div className="privacy"><Sparkles size={16} /><div><strong>Prywatne. Twoje.</strong><span>Self-hosted. Dane zostają u Ciebie.</span></div></div></aside>
     <main>
       {section === 'today' && <div className="topline"><div><span className="eyebrow">{greeting()}</span><div className="date-row"><h1>{dateLabel(date)}</h1><button className="icon-button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Poprzedni dzień"><ChevronLeft /></button><button className="icon-button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Następny dzień"><ChevronRight /></button></div></div><div className="top-actions"><button className="ghost" onClick={() => setShowWidgetSettings(true)}><SlidersHorizontal size={16} /> Dostosuj widok</button><button className="ghost" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16} /> Synchronizuj</button><span className={`connection ${today?.health ? 'connected' : ''}`}><i /> {today?.health ? 'Dane Garmin' : 'Brak danych Garmin'}</span><button className="icon-button" title="Wyloguj" onClick={signOut}><LogOut size={17} /></button></div></div>}
       {error && <div className="error-banner">{error}</div>}
-      {section === 'planner' && api ? <Planner api={api} selectedDate={date} onError={setError} /> : section !== 'today' ? <section className="placeholder panel"><div><h2>{navItems.find(([id]) => id === section)?.[1]}</h2><p>Ten obszar będzie rozwijany w kolejnych etapach.</p></div></section> : !today ? <div className="loading-card">Wczytywanie QND Health…</div> : <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>}
+      {content}
     </main>
     {showWidgetSettings && <WidgetSettings layout={widgetLayout} onChange={setWidgets} onClose={() => setShowWidgetSettings(false)} />}
     {showCustomActivity && api && <CustomActivityDialog api={api} date={date} onClose={() => setShowCustomActivity(false)} onCreated={load} />}
