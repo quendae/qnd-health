@@ -5,6 +5,7 @@ import type { DailyHealthRepository, DailyHealthRecord, DailyHealthUpsert } from
 import type { CompletedActivityRepository, CompletedActivityRecord, ProviderActivityUpsert } from '../activities/repository.js';
 import type { ActivityMatchRepository } from '../activities/matches.js';
 import type { HealthProfileRepository, HealthProfileRecord, HealthProfilePatch } from '../profile/repository.js';
+import type { CoachRepository, CoachConversationRecord, CoachMessageRecord } from '../coach/repository.js';
 import type { ApiTokenRepository } from '../auth/service.js';
 import type { AuditRepository } from '../audit/repository.js';
 import type { IdempotencyRepository, IdempotencyRecord } from '../idempotency/repository.js';
@@ -147,6 +148,27 @@ function activityData(input: ProviderActivityUpsert) {
   };
 }
 
+function mapCoachConversation(row: any): CoachConversationRecord {
+  return {
+    id: row.id,
+    title: row.title ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function mapCoachMessage(row: any): CoachMessageRecord {
+  return {
+    id: row.id,
+    conversationId: row.conversationId,
+    role: row.role,
+    content: row.content,
+    model: row.model ?? null,
+    toolMetadata: row.toolMetadata ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function rangeWhere(field: string, from?: string, to?: string) {
   if (!from && !to) return undefined;
   return {
@@ -255,6 +277,34 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
     async detach(planItemId) { await prisma.activityMatch.deleteMany({ where: { planItemId } }); },
   };
 
+  const coachRepository: CoachRepository = {
+    async createConversation(title = null) {
+      return mapCoachConversation(await prisma.coachConversation.create({ data: { title } }));
+    },
+    async listConversations() {
+      return (await prisma.coachConversation.findMany({ orderBy: { updatedAt: 'desc' } })).map(mapCoachConversation);
+    },
+    async findConversation(id) {
+      const row = await prisma.coachConversation.findUnique({ where: { id } });
+      return row ? mapCoachConversation(row) : null;
+    },
+    async listMessages(conversationId) {
+      return (await prisma.coachMessage.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })).map(mapCoachMessage);
+    },
+    async addMessage(input) {
+      const row = await prisma.coachMessage.create({
+        data: {
+          conversationId: input.conversationId,
+          role: input.role,
+          content: input.content,
+          model: input.model ?? null,
+          toolMetadata: input.toolMetadata ?? null,
+        },
+      });
+      return mapCoachMessage(row);
+    },
+  };
+
   const tokenRepository: ApiTokenRepository = {
     async findByHash(tokenHash) {
       const row = await prisma.apiToken.findUnique({ where: { tokenHash } });
@@ -279,5 +329,5 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
     },
   };
 
-  return { planRepository, nutritionRepository, measurementRepository, profileRepository, dailyHealthRepository, completedActivityRepository, activityMatchRepository, tokenRepository, auditRepository, idempotencyRepository };
+  return { planRepository, nutritionRepository, measurementRepository, profileRepository, dailyHealthRepository, completedActivityRepository, activityMatchRepository, coachRepository, tokenRepository, auditRepository, idempotencyRepository };
 }
