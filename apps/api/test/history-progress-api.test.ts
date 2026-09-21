@@ -68,7 +68,7 @@ const nutritionRepository = {
 
 const profileRepository = {
   async get() {
-    return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: 2200 };
+    return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: 2200, dailyProteinGoalGrams: 160 };
   },
   async upsert() { throw new Error('not used'); },
 };
@@ -78,22 +78,23 @@ function app() {
 }
 
 describe('history and progress API', () => {
-  it('builds daily history with plans, health, activities and weight', async () => {
+  it('returns every calendar day in the requested history range, including empty days', async () => {
     const server = app();
-    const response = await server.inject({ method: 'GET', url: '/api/v1/history?from=2026-09-20&to=2026-09-21', headers: auth });
+    const response = await server.inject({ method: 'GET', url: '/api/v1/history?from=2026-09-19&to=2026-09-21', headers: auth });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
-      from: '2026-09-20', to: '2026-09-21',
+      from: '2026-09-19', to: '2026-09-21',
       days: [
         { date: '2026-09-21', health: { steps: 9000 }, weightKg: 122.8, activities: [{ id: 'a2' }] },
         { date: '2026-09-20', health: { steps: 7000 }, weightKg: 123.4, activities: [{ id: 'a1' }] },
+        { date: '2026-09-19', health: null, weightKg: null, plans: [], activities: [] },
       ],
     });
     expect(response.json().days[0].plans).toHaveLength(2);
     await server.close();
   });
 
-  it('aggregates progress without inventing missing data', async () => {
+  it('aggregates progress without inventing missing data and includes protein goal series', async () => {
     const server = app();
     const response = await server.inject({ method: 'GET', url: '/api/v1/progress?from=2026-09-20&to=2026-09-21', headers: auth });
     expect(response.statusCode).toBe(200);
@@ -105,8 +106,8 @@ describe('history and progress API', () => {
       weight: { firstKg: 123.4, latestKg: 122.8, deltaKg: -0.6 },
     });
     expect(response.json().series).toEqual([
-      expect.objectContaining({ date: '2026-09-20', steps: 7000, stepsGoal: 7500, caloriesKcal: 1600, caloriesGoalKcal: 2200, vo2Max: 37.5 }),
-      expect.objectContaining({ date: '2026-09-21', steps: 9000, stepsGoal: 9000, caloriesKcal: 1100, caloriesGoalKcal: 2200, vo2Max: 38 }),
+      expect.objectContaining({ date: '2026-09-20', steps: 7000, stepsGoal: 7500, caloriesKcal: 1600, caloriesGoalKcal: 2200, proteinGrams: 75, proteinGoalGrams: 160, vo2Max: 37.5 }),
+      expect.objectContaining({ date: '2026-09-21', steps: 9000, stepsGoal: 9000, caloriesKcal: 1100, caloriesGoalKcal: 2200, proteinGrams: 60, proteinGoalGrams: 160, vo2Max: 38 }),
     ]);
     await server.close();
   });
