@@ -1,5 +1,5 @@
 import type { PlanWriteInput } from './api';
-import type { CompletedActivity } from './types';
+import type { CompletedActivity, WorkoutStructure } from './types';
 
 function positiveNumber(value: number | null | undefined): number | null {
   return value != null && Number.isFinite(value) && value > 0 ? value : null;
@@ -11,6 +11,7 @@ export function buildCustomActivityPlan(input: {
   activityType: string;
   durationMinutes: number | null;
   distanceKm: number | null;
+  workoutStructure?: WorkoutStructure | null;
   garminActivity: CompletedActivity | null;
 }): {
   plan: PlanWriteInput;
@@ -32,6 +33,7 @@ export function buildCustomActivityPlan(input: {
       activityType: garmin?.activityType ?? input.activityType,
       plannedDurationSeconds: garmin ? garminDuration : (fallbackDuration == null ? null : Math.round(fallbackDuration * 60)),
       plannedDistanceMeters: garmin ? garminDistance : (fallbackDistance == null ? null : Math.round(fallbackDistance * 1000)),
+      workoutStructure: garmin ? null : (input.workoutStructure ?? null),
     },
     completedActivityId: garmin?.id ?? null,
     manualProgressValue: garmin ? null : 1,
