@@ -162,6 +162,11 @@ model BodyMeasurement {
   scaleBmrKcal           Float?
   metabolicAge           Float?
   physiqueRating         Float?
+  bicepsCircumferenceCm  Float?
+  chestCircumferenceCm   Float?
+  waistCircumferenceCm   Float?
+  hipsCircumferenceCm    Float?
+  thighCircumferenceCm   Float?
   rawProviderDataJson    Json?
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
