@@ -11,10 +11,17 @@ const timestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(va
 const optionalMetric = z.number().nonnegative().nullable().optional();
 const createSchema = z.object({
   measuredAt: timestampSchema,
+  source: z.enum(['garmin', 'hermes', 'manual']).optional(),
+  transport: z.enum(['home_assistant', 'garmin_api']).nullable().optional(),
   weightKg: z.number().positive(),
   bodyFatPercent: optionalMetric,
   bmi: optionalMetric,
   muscleMassKg: optionalMetric,
+  bodyWaterPercent: optionalMetric,
+  boneMassKg: optionalMetric,
+  visceralFat: optionalMetric,
+  metabolicAge: optionalMetric,
+  physiqueRating: optionalMetric,
 });
 const listSchema = z.object({ from: timestampSchema.optional(), to: timestampSchema.optional() });
 
@@ -53,13 +60,19 @@ export function registerMeasurementRoutes(
           bodyFatPercent: parsed.data.bodyFatPercent ?? null,
           bmi: parsed.data.bmi ?? null,
           muscleMassKg: parsed.data.muscleMassKg ?? null,
-          source: 'hermes',
+          bodyWaterPercent: parsed.data.bodyWaterPercent ?? null,
+          boneMassKg: parsed.data.boneMassKg ?? null,
+          visceralFat: parsed.data.visceralFat ?? null,
+          metabolicAge: parsed.data.metabolicAge ?? null,
+          physiqueRating: parsed.data.physiqueRating ?? null,
+          transport: parsed.data.transport ?? null,
+          source: parsed.data.source ?? 'hermes',
         });
         return {
           statusCode: 201,
           body: created,
           entityId: created.id,
-          auditSummary: { measuredAt: created.measuredAt, source: created.source },
+          auditSummary: { measuredAt: created.measuredAt, source: created.source, transport: created.transport ?? null },
         };
       },
     });
