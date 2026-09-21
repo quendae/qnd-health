@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react';
 import { Activity, CalendarDays, CheckCircle2, Footprints, HeartPulse, Moon, Scale } from 'lucide-react';
 import type { QndHealthApi } from './api';
 import type { HistoryResponse } from './types';
+import { activityLabel } from './activity-catalog';
 import { dateLabel, formatDistance, formatDuration } from './view-model';
 import { rangeForDays } from './insights';
 
 const periods = [7, 30, 90] as const;
 
-function activityLabel(value: string) {
-  return ({ walking: 'Spacer', running: 'Bieg', cycling: 'Rower', strength_training: 'Trening siłowy' } as Record<string, string>)[value] ?? value;
-}
-
 function statusLabel(value: string) {
   return ({ completed: 'Wykonane', partial: 'Częściowo', planned: 'Zaplanowane', skipped: 'Pominięte', moved: 'Przeniesione', replaced: 'Zastąpione' } as Record<string, string>)[value] ?? value;
+}
+
+function daySource(day: HistoryResponse['days'][number]) {
+  if (day.health?.source === 'garmin') return 'Garmin';
+  if (day.health?.source) return day.health.source;
+  if (day.weightKg != null || day.activities.length > 0 || day.plans.length > 0) return 'Dane lokalne';
+  return 'Brak danych';
 }
 
 export function HistoryView({ api, selectedDate, onError }: { api: QndHealthApi; selectedDate: string; onError: (message: string | null) => void }) {
@@ -40,7 +44,7 @@ export function HistoryView({ api, selectedDate, onError }: { api: QndHealthApi;
 
     {loading && !data ? <div className="loading-card">Wczytywanie historii…</div> : data?.days.length === 0 ? <div className="panel empty-state">Brak zapisanych danych w tym okresie.</div> : <div className="history-list">
       {data?.days.map(day => <article className="history-day panel" key={day.date}>
-        <header><div><CalendarDays size={17} /><div><strong>{dateLabel(day.date)}</strong><span>{day.health?.source === 'garmin' ? 'Garmin' : day.health ? day.health.source : 'Dane lokalne'}</span></div></div>{day.weightKg != null && <span className="history-weight"><Scale size={15} /> {day.weightKg.toFixed(1)} kg</span>}</header>
+        <header><div><CalendarDays size={17} /><div><strong>{dateLabel(day.date)}</strong><span>{daySource(day)}</span></div></div>{day.weightKg != null && <span className="history-weight"><Scale size={15} /> {day.weightKg.toFixed(1)} kg</span>}</header>
         <div className="history-metrics">
           <div><Footprints /><span>Kroki</span><strong>{day.health?.steps?.toLocaleString('pl-PL') ?? '—'}</strong></div>
           <div><Moon /><span>Sen</span><strong>{formatDuration(day.health?.sleepDurationSeconds)}</strong></div>
