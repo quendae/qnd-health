@@ -18,6 +18,14 @@ export const openApiDocument = {
           notes: { type: ['string', 'null'] }, source: { type: 'string' },
         },
       },
+      CompletedActivity: {
+        type: 'object', required: ['id', 'provider', 'activityType', 'startedAt'],
+        properties: {
+          id: { type: 'string' }, provider: { type: 'string' }, activityType: { type: 'string' }, startedAt: { type: 'string', format: 'date-time' },
+          durationSeconds: { type: ['integer', 'null'] }, distanceMeters: { type: ['number', 'null'] },
+          avgHr: { type: ['integer', 'null'] }, maxHr: { type: ['integer', 'null'] }, calories: { type: ['number', 'null'] },
+        },
+      },
       TodayResponse: {
         type: 'object', required: ['date', 'activity', 'nutrition', 'weekToDate', 'remainingWeek'],
         properties: {
@@ -32,6 +40,13 @@ export const openApiDocument = {
   security: [{ bearerAuth: [] }],
   paths: {
     '/api/v1/today': { get: { summary: 'Read the composed Today Hub model', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Today Hub data', content: { 'application/json': { schema: { $ref: '#/components/schemas/TodayResponse' } } } } } } },
+    '/api/v1/activities': {
+      get: {
+        summary: 'List completed activities for a local calendar day', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'date', in: 'query', required: true, schema: { type: 'string', format: 'date' } }],
+        responses: { '200': { description: 'Completed activities', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/CompletedActivity' } } } } } } }, '422': { description: 'Invalid date' } },
+      },
+    },
     '/api/v1/plans': {
       get: { summary: 'List plan items', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Plan item list' } } },
       post: { summary: 'Create a plan item', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created plan item' } } },
