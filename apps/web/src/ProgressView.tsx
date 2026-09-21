@@ -75,6 +75,14 @@ export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi
           formatValue={value => `${Math.round(value).toLocaleString('pl-PL')} kcal`}
         />
         <ProgressChart
+          title="Białko"
+          description="Zapisane gramy białka względem dziennego celu"
+          points={data.series}
+          value={point => point.proteinGrams}
+          target={point => point.proteinGoalGrams}
+          formatValue={value => `${Math.round(value * 10) / 10} g`}
+        />
+        <ProgressChart
           title="Sen"
           description="Łączny czas snu"
           points={data.series}
@@ -83,7 +91,7 @@ export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi
         />
         <ProgressChart
           title="Tętno spoczynkowe"
-          description="RHR z danych Garmin"
+          description="Dzienna wartość RHR z danych Garmin"
           points={data.series}
           value={point => point.restingHr}
           formatValue={value => `${Math.round(value)} bpm`}
@@ -104,7 +112,7 @@ export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi
         />
       </div>
 
-      <div className="panel progress-notes"><Gauge size={18} /><div><strong>Jak czytać ten widok</strong><p>Wykresy nie zamieniają brakujących pomiarów na zero. Przerwa w linii oznacza brak danych. Linie celu dla kroków i kalorii pochodzą z ustawień obowiązujących w QND Health lub z celu dostarczonego przez Garmin.</p></div></div>
+      <div className="panel progress-notes"><Gauge size={18} /><div><strong>Jak czytać ten widok</strong><p>Wykresy nie zamieniają brakujących pomiarów na zero. Przerwa w linii oznacza brak danych. Linie celu dla kroków, kalorii i białka pochodzą z ustawień QND Health lub — dla kroków — z celu dostarczonego przez Garmin.</p></div></div>
     </>}
   </section>;
 }
