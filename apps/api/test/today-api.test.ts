@@ -118,7 +118,7 @@ const profileRepository = {
   async get() {
     return {
       id: 'default', dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180,
-      activityFactor: 1.2, defaultStepsGoal: 8000,
+      activityFactor: 1.2, defaultStepsGoal: 8000, dailyCaloriesGoalKcal: 2200,
     };
   },
 };
@@ -162,6 +162,7 @@ describe('GET /api/v1/today', () => {
         steps: { current: 6120, target: 9000, goalSource: 'garmin' },
       },
       nutrition: {
+        goalKcal: 2200,
         summary: {
           entryCount: 1,
           totals: { caloriesKcal: 500, proteinGrams: 30, carbsGrams: 50, fatGrams: 20 },
@@ -209,6 +210,7 @@ describe('GET /api/v1/today', () => {
       health: null,
       energy: { bmrKcal: 2178, tdeeKcal: 2613.6, source: 'mifflin_st_jeor', activityFactor: 1.2 },
       activity: { steps: { current: 0, target: 8000, goalSource: 'profile' } },
+      nutrition: { goalKcal: 2200 },
     });
 
     await app.close();
@@ -225,7 +227,7 @@ describe('GET /api/v1/today', () => {
       completedActivityRepository,
       profileRepository: {
         async get() {
-          return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: 180, activityFactor: 1.2, defaultStepsGoal: 8200 };
+          return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: 180, activityFactor: 1.2, defaultStepsGoal: 8200, dailyCaloriesGoalKcal: null };
         },
       },
       timeZone: 'Europe/Warsaw',
@@ -236,6 +238,7 @@ describe('GET /api/v1/today', () => {
     expect(response.json()).toMatchObject({
       energy: null,
       activity: { steps: { current: 0, target: 8200, goalSource: 'profile' } },
+      nutrition: { goalKcal: null },
     });
     await app.close();
   });
