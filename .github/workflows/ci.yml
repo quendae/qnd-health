@@ -17,4 +17,7 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile=false
+      - run: pnpm --filter @qnd-health/api prisma:generate
       - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build

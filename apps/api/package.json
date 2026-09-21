@@ -3,19 +3,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "pnpm prisma:generate && tsx watch src/server.ts",
     "start": "node dist/src/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "prisma:generate": "prisma generate --config ../../prisma.config.ts",
+    "prisma:push": "prisma db push --config ../../prisma.config.ts"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "@qnd-health/activity-model": "workspace:*",
+    "dotenv": "^17.2.2",
     "fastify": "^5.6.1",
+    "pg": "^8.16.3",
     "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/pg": "^8.15.5",
+    "prisma": "7.10.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

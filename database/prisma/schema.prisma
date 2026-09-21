@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../../apps/api/src/generated/prisma"
+  moduleFormat = "esm"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum PlanKind {
@@ -171,13 +172,13 @@ model NutritionEntry {
 }
 
 model ApiToken {
-  id         String   @id @default(uuid())
-  name       String
-  tokenHash  String   @unique
-  scopes     String[]
-  lastUsedAt DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id          String       @id @default(uuid())
+  name        String
+  tokenHash   String       @unique
+  scopes      String[]
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime     @default(now())
   auditEvents AuditEvent[]
 }
 
@@ -212,21 +213,21 @@ model IdempotencyRecord {
 }
 
 model ProviderConnection {
-  id                    String   @id @default(uuid())
-  provider              String   @unique
-  encryptedCredentials  String?
-  metadataJson          Json?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  provider             String   @unique
+  encryptedCredentials String?
+  metadataJson         Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model ProviderSyncCursor {
-  id          String   @id @default(uuid())
-  provider    String
-  dataset     String
-  cursor      String?
-  lastSyncAt  DateTime?
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(uuid())
+  provider   String
+  dataset    String
+  cursor     String?
+  lastSyncAt DateTime?
+  updatedAt  DateTime  @updatedAt
 
   @@unique([provider, dataset])
 }
@@ -243,21 +244,21 @@ model CoachReview {
 }
 
 model CoachRecommendation {
-  id             String   @id @default(uuid())
-  coachReviewId  String
-  type           String
-  status         String
-  proposalJson   Json
-  rationale      String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(uuid())
+  coachReviewId String
+  type          String
+  status        String
+  proposalJson  Json
+  rationale     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model CoachDecision {
-  id                 String   @id @default(uuid())
-  recommendationId   String
-  decision           String
-  beforeJson         Json?
-  afterJson          Json?
-  createdAt          DateTime @default(now())
+  id               String   @id @default(uuid())
+  recommendationId String
+  decision         String
+  beforeJson       Json?
+  afterJson        Json?
+  createdAt        DateTime @default(now())
 }
