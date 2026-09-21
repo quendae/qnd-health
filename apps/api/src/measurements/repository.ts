@@ -15,6 +15,11 @@ export interface MeasurementRecord {
   scaleBmrKcal?: number | null;
   metabolicAge?: number | null;
   physiqueRating?: number | null;
+  bicepsCircumferenceCm?: number | null;
+  chestCircumferenceCm?: number | null;
+  waistCircumferenceCm?: number | null;
+  hipsCircumferenceCm?: number | null;
+  thighCircumferenceCm?: number | null;
   transport?: string | null;
   source: 'garmin' | 'hermes' | 'manual';
 }
