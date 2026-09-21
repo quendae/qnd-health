@@ -1,11 +1,26 @@
 import { Database, HeartPulse, LockKeyhole, Settings, Watch } from 'lucide-react';
+import type { QndHealthApi } from './api';
+import { ProfileSettings } from './ProfileSettings';
+import type { EnergyEstimate } from './types';
 
 const datasets = ['Aktywności', 'Kroki', 'Sen', 'Tętno', 'HRV', 'Body Battery', 'Stres', 'Waga'];
 
-export function SettingsView() {
+export function SettingsView({
+  api,
+  energy,
+  onSaved,
+  onError,
+}: {
+  api: QndHealthApi;
+  energy: EnergyEstimate | null;
+  onSaved: () => void | Promise<void>;
+  onError: (message: string) => void;
+}) {
   return <section className="settings-view">
     <div className="insight-toolbar"><div><span className="eyebrow">Integracje i prywatność</span><h1>Ustawienia</h1></div></div>
     <div className="settings-grid">
+      <ProfileSettings api={api} energy={energy} onSaved={onSaved} onError={onError} />
+
       <article className="panel settings-card garmin-settings">
         <header><div className="settings-icon"><Watch /></div><div><h2>Garmin</h2><p>Oficjalne Garmin Health API</p></div><span className="provider-status pending"><i /> Nie skonfigurowano</span></header>
         <p className="settings-copy">Po otrzymaniu danych klienta OAuth dodamy je po stronie serwera. Hasło do Garmin Connect nie będzie potrzebne w aplikacji webowej.</p>
