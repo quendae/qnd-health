@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, BatteryCharging, Brain, CalendarDays, ChevronLeft, ChevronRight,
   Dumbbell, Gauge, HeartPulse, History, LayoutDashboard, Link2, LogOut,
-  Moon, RefreshCw, Settings, SlidersHorizontal, Sparkles, TrendingUp, Utensils, Weight,
+  Moon, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, TrendingUp, Utensils, Weight,
 } from 'lucide-react';
 import { ApiError, QndHealthApi } from './api';
+import { CustomActivityDialog } from './CustomActivityDialog';
 import { Planner } from './Planner';
 import { WidgetSettings } from './WidgetSettings';
 import type { ActivityCandidate, PlanItem, TodayResponse } from './types';
@@ -65,9 +66,14 @@ function Candidate({ candidate, onAttach, busy }: { candidate: ActivityCandidate
   </div>;
 }
 
-function ActivityPanel({ today, mutate, busyId }: { today: TodayResponse; mutate: (kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) => void; busyId: string | null }) {
+function ActivityPanel({ today, mutate, busyId, onAddActivity }: {
+  today: TodayResponse;
+  mutate: (kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) => void;
+  busyId: string | null;
+  onAddActivity: () => void;
+}) {
   return <section className="panel activity-panel widget-card">
-    <header><div><h2><Activity /> Aktywność</h2><p>Plan na dziś i postęp wykonania.</p></div><span className="section-link">Dzisiaj</span></header>
+    <header><div><h2><Activity /> Aktywność</h2><p>Plan na dziś i postęp wykonania.</p></div><div className="panel-header-actions"><span className="section-link">Dzisiaj</span><button className="ghost compact-action" onClick={onAddActivity}><Plus size={15} /> Dodaj aktywność</button></div></header>
     <div className="activity-list">
       {today.activity.items.length === 0 && <div className="empty">Brak zaplanowanej aktywności na ten dzień.</div>}
       {today.activity.items.map((item) => {
@@ -76,11 +82,13 @@ function ActivityPanel({ today, mutate, busyId }: { today: TodayResponse; mutate
         return <article className="activity-row" key={item.id}>
           <div className={`status-dot ${item.status}`}><span /></div>
           <div className="activity-main">
-            <div className="activity-title"><strong>{item.title}</strong><span>{item.kind === 'workout' ? 'Zaplanowany trening' : 'Cel dzienny'}</span></div>
+            <div className="activity-title"><strong>{item.title}</strong><span>{item.kind === 'workout' ? 'Aktywność / trening' : 'Cel dzienny'}</span></div>
             <div className="activity-progress">
               <div className="activity-value">{item.completionStrategy === 'activity_link'
                 ? <>{formatDuration(item.plannedDurationSeconds)}{item.plannedDistanceMeters ? ` / ${formatDistance(item.plannedDistanceMeters)}` : ''}</>
-                : <>{item.progress.currentValue ?? 0}{item.targetValue != null ? ` / ${item.targetValue}` : ''} {item.unit ?? ''}</>}</div>
+                : item.completionStrategy === 'manual'
+                  ? <>{item.status === 'completed' ? 'Wykonane' : 'Do wykonania'}</>
+                  : <>{item.progress.currentValue ?? 0}{item.targetValue != null ? ` / ${item.targetValue}` : ''} {item.unit ?? ''}</>}</div>
               {item.targetValue != null && <><ProgressBar value={percent} /><span className="percent">{percent}%</span></>}
             </div>
             {candidate && !item.linkedActivityId && <Candidate candidate={candidate} busy={busyId === item.id} onAttach={() => mutate('attach', item, candidate.id)} />}
@@ -88,6 +96,7 @@ function ActivityPanel({ today, mutate, busyId }: { today: TodayResponse; mutate
           <div className="activity-actions">
             <span className={`pill ${item.status}`}>{statusLabel(item)}</span>
             {item.completionStrategy === 'count_manual' && <div className="stepper"><button onClick={() => mutate('progress', item, Math.max(0, (item.progress.currentValue ?? 0) - 1))} disabled={busyId === item.id}>−</button><span>{item.progress.currentValue ?? 0}</span><button onClick={() => mutate('progress', item, (item.progress.currentValue ?? 0) + 1)} disabled={busyId === item.id}>+</button></div>}
+            {item.completionStrategy === 'manual' && <button className="ghost tiny" onClick={() => mutate('progress', item, item.status === 'completed' ? 0 : 1)} disabled={busyId === item.id}>{item.status === 'completed' ? 'Cofnij' : 'Wykonane'}</button>}
             {item.linkedActivityId && <button className="ghost tiny" onClick={() => mutate('detach', item)} disabled={busyId === item.id}>Odłącz</button>}
           </div>
         </article>;
@@ -157,6 +166,7 @@ export default function App() {
   const [section, setSection] = useState<Section>('today');
   const [widgetLayout, setWidgetLayout] = useState<TodayWidgetPreference[]>(loadWidgetLayout);
   const [showWidgetSettings, setShowWidgetSettings] = useState(false);
+  const [showCustomActivity, setShowCustomActivity] = useState(false);
   const api = useMemo(() => token ? new QndHealthApi(token) : null, [token]);
 
   const load = useCallback(async () => {
@@ -192,7 +202,7 @@ export default function App() {
   function renderWidget(id: TodayWidgetId) {
     if (!today) return null;
     if (id === 'health_metrics') return <HealthMetrics today={today} />;
-    if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} />;
+    if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} />;
     if (id === 'nutrition') return <NutritionPanel today={today} />;
     if (id === 'week_progress') return <WeekProgress today={today} />;
     if (id === 'remaining_week') return <RemainingWeek today={today} />;
@@ -207,5 +217,6 @@ export default function App() {
       {section === 'planner' && api ? <Planner api={api} selectedDate={date} onError={setError} /> : section !== 'today' ? <section className="placeholder panel"><div><h2>{navItems.find(([id]) => id === section)?.[1]}</h2><p>Ten obszar będzie rozwijany w kolejnych etapach.</p></div></section> : !today ? <div className="loading-card">Wczytywanie QND Health…</div> : <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>}
     </main>
     {showWidgetSettings && <WidgetSettings layout={widgetLayout} onChange={setWidgets} onClose={() => setShowWidgetSettings(false)} />}
+    {showCustomActivity && api && <CustomActivityDialog api={api} date={date} onClose={() => setShowCustomActivity(false)} onCreated={load} />}
   </div>;
 }
