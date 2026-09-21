@@ -7,6 +7,7 @@ export interface ProfileFormState {
   activityFactor: string;
   defaultStepsGoal: string;
   dailyCaloriesGoalKcal: string;
+  dailyProteinGoalGrams: string;
 }
 
 export function profileFormDefaults(profile: HealthProfile | null): ProfileFormState {
@@ -17,6 +18,7 @@ export function profileFormDefaults(profile: HealthProfile | null): ProfileFormS
     activityFactor: String(profile?.activityFactor ?? 1.2),
     defaultStepsGoal: String(profile?.defaultStepsGoal ?? 7500),
     dailyCaloriesGoalKcal: profile?.dailyCaloriesGoalKcal == null ? '' : String(profile.dailyCaloriesGoalKcal),
+    dailyProteinGoalGrams: profile?.dailyProteinGoalGrams == null ? '' : String(profile.dailyProteinGoalGrams),
   };
 }
 
@@ -25,6 +27,7 @@ export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, '
   const activityFactor = Number(form.activityFactor);
   const defaultStepsGoal = Number(form.defaultStepsGoal);
   const dailyCaloriesGoalKcal = form.dailyCaloriesGoalKcal.trim() === '' ? null : Number(form.dailyCaloriesGoalKcal);
+  const dailyProteinGoalGrams = form.dailyProteinGoalGrams.trim() === '' ? null : Number(form.dailyProteinGoalGrams);
 
   if (heightCm != null && (!Number.isFinite(heightCm) || heightCm <= 0)) {
     throw new Error('Wzrost musi być większy od zera');
@@ -38,6 +41,9 @@ export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, '
   if (dailyCaloriesGoalKcal != null && (!Number.isInteger(dailyCaloriesGoalKcal) || dailyCaloriesGoalKcal <= 0)) {
     throw new Error('Cel kcal musi być dodatnią liczbą całkowitą');
   }
+  if (dailyProteinGoalGrams != null && (!Number.isInteger(dailyProteinGoalGrams) || dailyProteinGoalGrams <= 0)) {
+    throw new Error('Cel białka musi być dodatnią liczbą całkowitą');
+  }
 
   return {
     dateOfBirth: form.dateOfBirth || null,
@@ -46,5 +52,6 @@ export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, '
     activityFactor,
     defaultStepsGoal,
     dailyCaloriesGoalKcal,
+    dailyProteinGoalGrams,
   };
 }
