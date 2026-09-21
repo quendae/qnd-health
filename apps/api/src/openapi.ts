@@ -28,7 +28,7 @@ export const openApiDocument = {
         },
       },
       HealthProfile: {
-        type: 'object', required: ['id', 'dateOfBirth', 'sexForBmr', 'heightCm', 'activityFactor', 'defaultStepsGoal', 'dailyCaloriesGoalKcal'],
+        type: 'object', required: ['id', 'dateOfBirth', 'sexForBmr', 'heightCm', 'activityFactor', 'defaultStepsGoal', 'dailyCaloriesGoalKcal', 'dailyProteinGoalGrams'],
         properties: {
           id: { type: 'string', enum: ['default'] },
           dateOfBirth: { type: ['string', 'null'], format: 'date' },
@@ -37,6 +37,7 @@ export const openApiDocument = {
           activityFactor: { type: 'number', minimum: 1, maximum: 3 },
           defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
           dailyCaloriesGoalKcal: { type: ['integer', 'null'], minimum: 1, maximum: 20000, description: 'Optional manually configured daily calorie target. It is distinct from estimated TDEE.' },
+          dailyProteinGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 1000, description: 'Optional manually configured daily protein target in grams.' },
         },
       },
       HealthProfilePatch: {
@@ -48,6 +49,7 @@ export const openApiDocument = {
           activityFactor: { type: 'number', minimum: 1, maximum: 3 },
           defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
           dailyCaloriesGoalKcal: { type: ['integer', 'null'], minimum: 1, maximum: 20000, description: 'Set null to disable calorie-goal tracking.' },
+          dailyProteinGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 1000, description: 'Set null to disable protein-goal tracking.' },
         },
       },
       EnergyEstimate: {
@@ -157,12 +159,12 @@ export const openApiDocument = {
     },
     '/api/v1/history': {
       get: {
-        summary: 'Read daily health, activity, plan and weight history', security: [{ bearerAuth: [] }],
+        summary: 'Read consecutive daily health, activity, plan and weight history', security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
           { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
         ],
-        responses: { '200': { description: 'Daily history', content: { 'application/json': { schema: { $ref: '#/components/schemas/HistoryResponse' } } } }, '422': { description: 'Invalid date range' } },
+        responses: { '200': { description: 'Every calendar day in the requested range; days with no measurements are returned with null/empty values', content: { 'application/json': { schema: { $ref: '#/components/schemas/HistoryResponse' } } } }, '422': { description: 'Invalid date range' } },
       },
     },
     '/api/v1/progress': {
@@ -172,7 +174,7 @@ export const openApiDocument = {
           { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
           { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
         ],
-        responses: { '200': { description: 'Progress aggregate and time series; series includes step goals, nutrition calories/goal and VO2 max when available; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
+        responses: { '200': { description: 'Progress aggregate and time series; series includes step goals, calories/goal, protein/goal and VO2 max when available; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
       },
     },
     '/api/v1/health/daily/{date}': {
@@ -207,11 +209,11 @@ export const openApiDocument = {
     },
     '/api/v1/plans': {
       get: { summary: 'List plan items', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Plan item list' } } },
-      post: { summary: 'Create a plan item', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created plan item' } } },
+      post: { summary: 'Create a plan item; workout items may include structured sets/reps/time/rest metadata', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created plan item' } } },
     },
     '/api/v1/plans/{id}': {
       patch: {
-        summary: 'Edit or move a plan item', security: [{ bearerAuth: [] }],
+        summary: 'Edit or move a plan item, including workout structure', security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
         responses: { '200': { description: 'Updated plan item' }, '404': { description: 'Plan item not found' }, '422': { description: 'Invalid plan update' } },
       },
