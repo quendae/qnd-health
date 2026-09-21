@@ -1,6 +1,6 @@
 export interface AuditEventInput {
-  actorType: 'api_token';
-  apiTokenId: string;
+  actorType: 'api_token' | 'coach';
+  apiTokenId?: string | null;
   action: string;
   entityType: string;
   entityId: string | null;

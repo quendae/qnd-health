@@ -147,6 +147,8 @@ function safeProgress(input: CoachProgressInput | null) {
       stepsGoal: typeof point.stepsGoal === 'number' ? point.stepsGoal : null,
       caloriesKcal: typeof point.caloriesKcal === 'number' ? point.caloriesKcal : null,
       caloriesGoalKcal: typeof point.caloriesGoalKcal === 'number' ? point.caloriesGoalKcal : null,
+      proteinGrams: typeof point.proteinGrams === 'number' ? point.proteinGrams : null,
+      proteinGoalGrams: typeof point.proteinGoalGrams === 'number' ? point.proteinGoalGrams : null,
       restingHr: typeof point.restingHr === 'number' ? point.restingHr : null,
       hrv: typeof point.hrv === 'number' ? point.hrv : null,
       sleepDurationSeconds: typeof point.sleepDurationSeconds === 'number' ? point.sleepDurationSeconds : null,
@@ -165,6 +167,7 @@ export function buildCoachContext(input: CoachContextInput) {
     goals: {
       steps: today.activity.steps.target,
       caloriesKcal: today.nutrition.goalKcal ?? profile?.dailyCaloriesGoalKcal ?? null,
+      proteinGrams: profile?.dailyProteinGoalGrams ?? null,
     },
     profile: profile ? {
       heightCm: profile.heightCm,
@@ -172,6 +175,7 @@ export function buildCoachContext(input: CoachContextInput) {
       activityFactor: profile.activityFactor,
       defaultStepsGoal: profile.defaultStepsGoal,
       dailyCaloriesGoalKcal: profile.dailyCaloriesGoalKcal,
+      dailyProteinGoalGrams: profile.dailyProteinGoalGrams,
     } : null,
     today: {
       steps: { ...today.activity.steps },
@@ -190,6 +194,7 @@ export function buildCoachContext(input: CoachContextInput) {
         fatGrams: today.nutrition.summary.totals.fatGrams,
         fiberGrams: today.nutrition.summary.totals.fiberGrams,
         goalKcal: today.nutrition.goalKcal,
+        goalProteinGrams: profile?.dailyProteinGoalGrams ?? null,
       },
     },
     plans: input.plans.map(safePlan),

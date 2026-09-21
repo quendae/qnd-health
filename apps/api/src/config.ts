@@ -9,6 +9,9 @@ export interface AppConfig {
   tokenPepper: string;
   timeZone: string;
   webDistPath: string;
+  deepseekApiKey: string | null;
+  deepseekBaseUrl: string;
+  deepseekModel: string;
 }
 
 export function findProjectRoot(start = process.cwd()): string {
@@ -57,5 +60,8 @@ export function loadConfig(inputEnv?: NodeJS.ProcessEnv): AppConfig {
     tokenPepper: required(env, 'TOKEN_PEPPER'),
     timeZone: env.TIME_ZONE?.trim() || 'Europe/Warsaw',
     webDistPath: resolve(projectRoot, env.WEB_DIST_PATH?.trim() || 'apps/web/dist'),
+    deepseekApiKey: env.DEEPSEEK_API_KEY?.trim() || null,
+    deepseekBaseUrl: env.DEEPSEEK_BASE_URL?.trim() || 'https://api.deepseek.com',
+    deepseekModel: env.DEEPSEEK_MODEL?.trim() || 'deepseek-flash',
   };
 }
