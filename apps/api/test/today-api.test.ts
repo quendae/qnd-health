@@ -114,8 +114,17 @@ const completedActivityRepository = {
   },
 };
 
+const profileRepository = {
+  async get() {
+    return {
+      id: 'default', dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180,
+      activityFactor: 1.2, defaultStepsGoal: 8000,
+    };
+  },
+};
+
 describe('GET /api/v1/today', () => {
-  it('composes activity, nutrition, health, weight and remaining week into one daily read model', async () => {
+  it('composes activity, nutrition, health, weight, energy and remaining week into one daily read model', async () => {
     const app = buildApp({
       tokenPepper: pepper,
       tokenRepository: tokenRepository(),
@@ -124,6 +133,7 @@ describe('GET /api/v1/today', () => {
       measurementRepository,
       dailyHealthRepository,
       completedActivityRepository,
+      profileRepository,
       timeZone: 'Europe/Warsaw',
     } as any);
 
@@ -142,6 +152,12 @@ describe('GET /api/v1/today', () => {
         source: 'garmin', steps: 6120, stepsGoal: 9000, restingHr: 64, bodyBattery: 76,
       },
       latestMeasurement: { weightKg: 122.8 },
+      energy: {
+        bmrKcal: 2178,
+        tdeeKcal: 2613.6,
+        source: 'mifflin_st_jeor',
+        activityFactor: 1.2,
+      },
       activity: {
         steps: { current: 6120, target: 9000, goalSource: 'garmin' },
       },
@@ -169,7 +185,7 @@ describe('GET /api/v1/today', () => {
     await app.close();
   });
 
-  it('returns permanent fallback steps even when Garmin health data is absent', async () => {
+  it('uses the profile step goal when Garmin health data has no provider goal', async () => {
     const app = buildApp({
       tokenPepper: pepper,
       tokenRepository: tokenRepository(),
@@ -178,6 +194,7 @@ describe('GET /api/v1/today', () => {
       measurementRepository,
       dailyHealthRepository: { async findByDate() { return null; }, async list() { return []; } },
       completedActivityRepository,
+      profileRepository,
       timeZone: 'Europe/Warsaw',
     } as any);
 
@@ -190,12 +207,36 @@ describe('GET /api/v1/today', () => {
     expect(response.json()).toMatchObject({
       date: '2026-09-21',
       health: null,
-      activity: { steps: { current: 0, target: 7500, goalSource: 'fallback' } },
-    });
-    expect(response.json().activity.items.find((item: any) => item.id === 'steps')).toMatchObject({
-      status: 'planned', progress: { currentValue: 0, targetValue: 7500 },
+      energy: { bmrKcal: 2178, tdeeKcal: 2613.6, source: 'mifflin_st_jeor', activityFactor: 1.2 },
+      activity: { steps: { current: 0, target: 8000, goalSource: 'profile' } },
     });
 
+    await app.close();
+  });
+
+  it('keeps energy null when the profile is incomplete while still using its step goal', async () => {
+    const app = buildApp({
+      tokenPepper: pepper,
+      tokenRepository: tokenRepository(),
+      planRepository,
+      nutritionRepository,
+      measurementRepository,
+      dailyHealthRepository: { async findByDate() { return null; }, async list() { return []; } },
+      completedActivityRepository,
+      profileRepository: {
+        async get() {
+          return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: 180, activityFactor: 1.2, defaultStepsGoal: 8200 };
+        },
+      },
+      timeZone: 'Europe/Warsaw',
+    } as any);
+
+    const response = await app.inject({ method: 'GET', url: '/api/v1/today?date=2026-09-21', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      energy: null,
+      activity: { steps: { current: 0, target: 8200, goalSource: 'profile' } },
+    });
     await app.close();
   });
 });
