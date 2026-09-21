@@ -2,8 +2,8 @@ export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'QND Health API',
-    version: '0.2.0',
-    description: 'Private health, planning and nutrition API used by the QND Health web app and Hermes agent.',
+    version: '0.3.0',
+    description: 'Private health, planning, nutrition, profile and coaching API used by the QND Health web app and Hermes agent.',
   },
   servers: [{ url: 'https://fit.qqnd.fyi', description: 'QND Health production' }],
   components: {
@@ -16,6 +16,45 @@ export const openApiDocument = {
           caloriesKcal: { type: ['number', 'null'] }, proteinGrams: { type: ['number', 'null'] }, carbsGrams: { type: ['number', 'null'] },
           fatGrams: { type: ['number', 'null'] }, fiberGrams: { type: ['number', 'null'] }, quantityText: { type: ['string', 'null'] },
           notes: { type: ['string', 'null'] }, source: { type: 'string' },
+        },
+      },
+      NutritionWrite: {
+        type: 'object',
+        properties: {
+          consumedAt: { type: 'string', format: 'date-time' }, mealType: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack', 'other'] },
+          title: { type: 'string' }, caloriesKcal: { type: ['number', 'null'], minimum: 0 }, proteinGrams: { type: ['number', 'null'], minimum: 0 },
+          carbsGrams: { type: ['number', 'null'], minimum: 0 }, fatGrams: { type: ['number', 'null'], minimum: 0 }, fiberGrams: { type: ['number', 'null'], minimum: 0 },
+          quantityText: { type: ['string', 'null'] }, notes: { type: ['string', 'null'] }, source: { type: 'string', enum: ['hermes', 'manual'] },
+        },
+      },
+      HealthProfile: {
+        type: 'object', required: ['id', 'dateOfBirth', 'sexForBmr', 'heightCm', 'activityFactor', 'defaultStepsGoal'],
+        properties: {
+          id: { type: 'string', enum: ['default'] },
+          dateOfBirth: { type: ['string', 'null'], format: 'date' },
+          sexForBmr: { type: ['string', 'null'], enum: ['male', 'female', null] },
+          heightCm: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 260 },
+          activityFactor: { type: 'number', minimum: 1, maximum: 3 },
+          defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
+        },
+      },
+      HealthProfilePatch: {
+        type: 'object', minProperties: 1,
+        properties: {
+          dateOfBirth: { type: ['string', 'null'], format: 'date' },
+          sexForBmr: { type: ['string', 'null'], enum: ['male', 'female', null] },
+          heightCm: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 260 },
+          activityFactor: { type: 'number', minimum: 1, maximum: 3 },
+          defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
+        },
+      },
+      EnergyEstimate: {
+        type: 'object', required: ['bmrKcal', 'tdeeKcal', 'source', 'activityFactor'],
+        properties: {
+          bmrKcal: { type: 'number', description: 'Estimated basal metabolic rate in kcal/day.' },
+          tdeeKcal: { type: 'number', description: 'Phase-one estimated total daily energy expenditure in kcal/day.' },
+          source: { type: 'string', enum: ['mifflin_st_jeor'] },
+          activityFactor: { type: 'number', minimum: 1, maximum: 3 },
         },
       },
       CompletedActivity: {
@@ -33,9 +72,9 @@ export const openApiDocument = {
         properties: {
           source: { type: 'string', enum: ['garmin'], default: 'garmin' },
           transport: { type: 'string', enum: ['home_assistant', 'garmin_api'] },
-          steps: { type: ['integer', 'null'], minimum: 0 }, floorsAscended: { type: ['number', 'null'], minimum: 0 },
-          intensityMinutes: { type: ['integer', 'null'], minimum: 0 }, restingHr: { type: ['integer', 'null'], minimum: 0 },
-          hrv: { type: ['number', 'null'], minimum: 0 }, stress: { type: ['number', 'null'], minimum: 0 },
+          steps: { type: ['integer', 'null'], minimum: 0 }, stepsGoal: { type: ['number', 'null'], exclusiveMinimum: 0 },
+          floorsAscended: { type: ['number', 'null'], minimum: 0 }, intensityMinutes: { type: ['integer', 'null'], minimum: 0 },
+          restingHr: { type: ['integer', 'null'], minimum: 0 }, hrv: { type: ['number', 'null'], minimum: 0 }, stress: { type: ['number', 'null'], minimum: 0 },
           bodyBattery: { type: ['number', 'null'], minimum: 0 }, sleepDurationSeconds: { type: ['integer', 'null'], minimum: 0 },
           sleepStages: { type: ['object', 'null'], additionalProperties: true }, respiration: { type: ['number', 'null'], minimum: 0 },
           spo2: { type: ['number', 'null'], minimum: 0 }, calories: { type: ['number', 'null'], minimum: 0 },
@@ -66,12 +105,13 @@ export const openApiDocument = {
         },
       },
       TodayResponse: {
-        type: 'object', required: ['date', 'activity', 'nutrition', 'weekToDate', 'remainingWeek'],
+        type: 'object', required: ['date', 'activity', 'nutrition', 'weekToDate', 'remainingWeek', 'energy'],
         properties: {
           date: { type: 'string', format: 'date' }, health: { type: ['object', 'null'], additionalProperties: true },
-          latestMeasurement: { type: ['object', 'null'], additionalProperties: true }, activity: { type: 'object', additionalProperties: true },
-          nutrition: { type: 'object', additionalProperties: true }, weekToDate: { type: 'object', additionalProperties: true },
-          remainingWeek: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          latestMeasurement: { type: ['object', 'null'], additionalProperties: true },
+          energy: { oneOf: [{ $ref: '#/components/schemas/EnergyEstimate' }, { type: 'null' }] },
+          activity: { type: 'object', additionalProperties: true }, nutrition: { type: 'object', additionalProperties: true },
+          weekToDate: { type: 'object', additionalProperties: true }, remainingWeek: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
       },
       HistoryResponse: {
@@ -94,6 +134,23 @@ export const openApiDocument = {
   security: [{ bearerAuth: [] }],
   paths: {
     '/api/v1/today': { get: { summary: 'Read the composed Today Hub model', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Today Hub data', content: { 'application/json': { schema: { $ref: '#/components/schemas/TodayResponse' } } } } } } },
+    '/api/v1/profile': {
+      get: {
+        summary: 'Read the single-user health profile used for step goals and energy estimates', security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Health profile or null before first save', content: { 'application/json': { schema: { oneOf: [{ $ref: '#/components/schemas/HealthProfile' }, { type: 'null' }] } } } },
+        },
+      },
+      patch: {
+        summary: 'Update the single-user health profile', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/HealthProfilePatch' } } } },
+        responses: {
+          '200': { description: 'Updated health profile', content: { 'application/json': { schema: { $ref: '#/components/schemas/HealthProfile' } } } },
+          '422': { description: 'Invalid profile fields or future date of birth' },
+        },
+      },
+    },
     '/api/v1/history': {
       get: {
         summary: 'Read daily health, activity, plan and weight history', security: [{ bearerAuth: [] }],
@@ -173,7 +230,34 @@ export const openApiDocument = {
       },
     },
     '/api/v1/nutrition': {
-      post: { summary: 'Create a nutrition entry', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created nutrition entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionEntry' } } } }, '409': { description: 'Idempotency key conflict' } } },
+      post: {
+        summary: 'Create a nutrition entry', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionWrite' } } } },
+        responses: { '201': { description: 'Created nutrition entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionEntry' } } } }, '409': { description: 'Idempotency key conflict' } },
+      },
+    },
+    '/api/v1/nutrition/{id}': {
+      patch: {
+        summary: 'Edit a nutrition entry', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionWrite' } } } },
+        responses: {
+          '200': { description: 'Updated nutrition entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/NutritionEntry' } } } },
+          '404': { description: 'Nutrition entry not found' }, '422': { description: 'Invalid nutrition update' },
+        },
+      },
+      delete: {
+        summary: 'Delete a nutrition entry', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+        ],
+        responses: { '204': { description: 'Nutrition entry deleted' }, '404': { description: 'Nutrition entry not found' } },
+      },
     },
     '/api/v1/measurements': {
       post: {
