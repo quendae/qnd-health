@@ -120,6 +120,7 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
         entries: todaysNutrition,
         summary: summarizeNutrition(date, todaysNutrition),
         goalKcal: profile?.dailyCaloriesGoalKcal ?? null,
+        goalProteinGrams: profile?.dailyProteinGoalGrams ?? null,
       },
       weekToDate: {
         totalPlanItems: toDatePlans.length,
