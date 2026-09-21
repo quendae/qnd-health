@@ -13,6 +13,7 @@ import type { CompletedActivityRepository } from './activities/repository.js';
 import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerActivityRoutes } from './activities/routes.js';
 import { registerTodayRoutes } from './today/routes.js';
+import { registerInsightRoutes } from './insights/routes.js';
 import type { AuditRepository } from './audit/repository.js';
 import { noopAuditRepository } from './audit/repository.js';
 import type { IdempotencyRepository } from './idempotency/repository.js';
@@ -68,6 +69,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (authorizer && options.measurementRepository) {
     registerMeasurementRoutes(app, { authorizer, measurementRepository: options.measurementRepository, auditRepository, idempotencyRepository });
+  }
+  if (authorizer && options.planRepository && options.measurementRepository && options.dailyHealthRepository && options.completedActivityRepository) {
+    registerInsightRoutes(app, {
+      authorizer,
+      planRepository: options.planRepository,
+      measurementRepository: options.measurementRepository,
+      dailyHealthRepository: options.dailyHealthRepository,
+      completedActivityRepository: options.completedActivityRepository,
+      timeZone,
+    });
   }
   if (authorizer && options.planRepository && options.nutritionRepository && options.measurementRepository && options.dailyHealthRepository && options.completedActivityRepository) {
     registerTodayRoutes(app, {
