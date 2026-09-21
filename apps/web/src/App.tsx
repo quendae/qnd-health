@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Brain, CalendarDays, ChevronLeft, ChevronRight, Flame,
+  Activity, Brain, Building2, CalendarDays, ChevronLeft, ChevronRight, Flame,
   Dumbbell, Gauge, HeartPulse, History, LayoutDashboard, Link2, LogOut,
-  Moon, Pencil, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, Trash2, TrendingUp, Utensils, Weight,
+  Moon, Pencil, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, Timer, Trash2, TrendingUp, Utensils, Weight,
 } from 'lucide-react';
 import { ApiError, QndHealthApi } from './api';
 import { CustomActivityDialog } from './CustomActivityDialog';
 import { NutritionEntryDialog } from './NutritionEntryDialog';
-import { QuickActivityPresets } from './QuickActivityPresets';
 import { HistoryView } from './HistoryView';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
 import { SettingsView } from './SettingsView';
 import { WidgetSettings } from './WidgetSettings';
-import type { ActivityCandidate, NutritionEntry, PlanItem, TodayResponse } from './types';
+import type { ActivityCandidate, NutritionEntry, PlanItem, TodayResponse, WorkoutStructure } from './types';
+import { activityLabel } from './activity-catalog';
 import { formatMetric } from './format-number';
 import { dateLabel, formatDistance, formatDuration, greeting, progressPercent, shortDateLabel, weekCompletion } from './view-model';
 import { defaultTodayWidgetLayout, normalizeTodayWidgetLayout, type TodayWidgetId, type TodayWidgetPreference } from './widget-layout';
@@ -55,6 +55,16 @@ function stepGoalLabel(source: TodayResponse['activity']['steps']['goalSource'])
   return 'Cel domyślny';
 }
 
+function workoutStructureText(structure: WorkoutStructure | null | undefined): string | null {
+  if (!structure) return null;
+  const bits: string[] = [];
+  if (structure.sets) bits.push(`${structure.sets} serie`);
+  if (structure.repsPerSet) bits.push(`${structure.repsPerSet} powt./serię`);
+  if (structure.secondsPerSet) bits.push(`${structure.secondsPerSet} s/serię`);
+  if (structure.restSeconds != null) bits.push(`przerwa ${structure.restSeconds} s`);
+  return bits.length ? bits.join(' · ') : null;
+}
+
 function MetricCard({ icon: Icon, label, value, unit, sub }: { icon: typeof Weight; label: string; value: string; unit?: string; sub?: string }) {
   return <div className="metric-card">
     <span className="metric-icon"><Icon size={18} /></span>
@@ -69,26 +79,23 @@ function ProgressBar({ value, tone = 'green' }: { value: number; tone?: 'green' 
 function Candidate({ candidate, onAttach, busy }: { candidate: ActivityCandidate; onAttach: () => void; busy: boolean }) {
   return <div className="candidate">
     <div className="garmin-mark">GARMIN</div>
-    <div className="candidate-copy"><span>Pasująca aktywność</span><strong>{candidate.activityType} · {formatDistance(candidate.distanceMeters)} · {formatDuration(candidate.durationSeconds)}</strong><small>{new Date(candidate.startedAt).toLocaleString('pl-PL', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</small></div>
+    <div className="candidate-copy"><span>Pasująca aktywność</span><strong>{activityLabel(candidate.activityType)} · {formatDistance(candidate.distanceMeters)} · {formatDuration(candidate.durationSeconds)}</strong><small>{new Date(candidate.startedAt).toLocaleString('pl-PL', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</small></div>
     <button className="primary small" onClick={onAttach} disabled={busy}><Link2 size={15} /> Połącz</button>
   </div>;
 }
 
-function ActivityPanel({ api, date, today, mutate, busyId, onAddActivity, onError, onReload }: {
-  api: QndHealthApi;
-  date: string;
+function ActivityPanel({ today, mutate, busyId, onAddActivity, onDelete }: {
   today: TodayResponse;
   mutate: (kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) => void;
   busyId: string | null;
   onAddActivity: () => void;
-  onError: (message: string) => void;
-  onReload: () => void | Promise<void>;
+  onDelete: (item: PlanItem) => void;
 }) {
   const steps = today.activity.steps;
   const stepPercent = steps.target > 0 ? Math.min(100, Math.round((steps.current / steps.target) * 100)) : 0;
   const visibleItems = today.activity.items.filter(item => item.metricKey !== 'steps');
   return <section className="panel activity-panel widget-card">
-    <header><div><h2><Activity /> Aktywność</h2><p>Codzienny ruch, szybkie ćwiczenia i plan.</p></div><div className="panel-header-actions"><span className="section-link">Dzisiaj</span><button className="ghost compact-action" onClick={onAddActivity}><Plus size={15} /> Dodaj aktywność</button></div></header>
+    <header><div><h2><Activity /> Aktywność</h2><p>Codzienny ruch, aktywności i plan.</p></div><div className="panel-header-actions"><span className="section-link">Dzisiaj</span><button className="ghost compact-action" onClick={onAddActivity}><Plus size={15} /> Dodaj aktywność</button></div></header>
     <div className="steps-row">
       <div className="status-dot metric_auto"><span /></div>
       <div className="steps-main">
@@ -96,16 +103,16 @@ function ActivityPanel({ api, date, today, mutate, busyId, onAddActivity, onErro
         <div className="activity-progress"><div className="activity-value">{formatMetric(steps.current, 0)} / {formatMetric(steps.target, 0)} kroków</div><ProgressBar value={stepPercent} /><span className="percent">{stepPercent}%</span></div>
       </div>
     </div>
-    <QuickActivityPresets api={api} date={date} onCreated={onReload} onError={onError} />
     <div className="activity-list">
-      {visibleItems.length === 0 && <div className="empty">Brak innych zaplanowanych aktywności na ten dzień.</div>}
+      {visibleItems.length === 0 && <div className="empty">Brak dodanych lub zaplanowanych aktywności na ten dzień.</div>}
       {visibleItems.map((item) => {
         const percent = progressPercent(item.progress.ratio);
         const candidate = item.candidates?.[0];
+        const structure = workoutStructureText(item.workoutStructure);
         return <article className="activity-row" key={item.id}>
           <div className={`status-dot ${item.status}`}><span /></div>
           <div className="activity-main">
-            <div className="activity-title"><strong>{item.title}</strong><span>{item.kind === 'workout' ? 'Aktywność / trening' : 'Cel dzienny'}</span></div>
+            <div className="activity-title"><strong>{item.title}</strong><span>{item.kind === 'workout' ? `${activityLabel(item.activityType ?? 'other')}${structure ? ` · ${structure}` : ''}` : 'Cel dzienny'}</span></div>
             <div className="activity-progress">
               <div className="activity-value">{item.completionStrategy === 'activity_link'
                 ? <>{formatDuration(item.plannedDurationSeconds)}{item.plannedDistanceMeters ? ` / ${formatDistance(item.plannedDistanceMeters)}` : ''}</>
@@ -121,6 +128,7 @@ function ActivityPanel({ api, date, today, mutate, busyId, onAddActivity, onErro
             {item.completionStrategy === 'count_manual' && <div className="stepper"><button onClick={() => mutate('progress', item, Math.max(0, (item.progress.currentValue ?? 0) - 1))} disabled={busyId === item.id}>−</button><span>{item.progress.currentValue ?? 0}</span><button onClick={() => mutate('progress', item, (item.progress.currentValue ?? 0) + 1)} disabled={busyId === item.id}>+</button></div>}
             {(item.completionStrategy === 'manual' || item.completionStrategy === 'activity_link') && !item.linkedActivityId && <button className="ghost tiny" onClick={() => mutate('progress', item, item.status === 'completed' ? 0 : 1)} disabled={busyId === item.id}>{item.status === 'completed' ? 'Cofnij' : 'Wykonane'}</button>}
             {item.linkedActivityId && <button className="ghost tiny" onClick={() => mutate('detach', item)} disabled={busyId === item.id}>Odłącz</button>}
+            <button className="icon-button danger" onClick={() => onDelete(item)} disabled={busyId === item.id} aria-label={`Usuń ${item.title}`} title="Usuń aktywność"><Trash2 size={14} /></button>
           </div>
         </article>;
       })}
@@ -136,10 +144,14 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
 }) {
   const { totals } = today.nutrition.summary;
   const goalKcal = today.nutrition.goalKcal;
+  const goalProtein = today.nutrition.goalProteinGrams;
   const caloriePercent = totals.caloriesKcal != null && goalKcal != null && goalKcal > 0
     ? Math.round((totals.caloriesKcal / goalKcal) * 100)
     : null;
   const calorieDelta = totals.caloriesKcal != null && goalKcal != null ? goalKcal - totals.caloriesKcal : null;
+  const proteinPercent = totals.proteinGrams != null && goalProtein != null && goalProtein > 0
+    ? Math.round((totals.proteinGrams / goalProtein) * 100)
+    : null;
   const macro = [
     ['Białko', totals.proteinGrams], ['Węglowodany', totals.carbsGrams],
     ['Tłuszcz', totals.fatGrams], ['Błonnik', totals.fiberGrams],
@@ -154,6 +166,7 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
       </div>
       <span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span>
     </div>
+    {goalProtein != null && <div className="protein-goal-row"><div><span>Białko</span><strong>{formatMetric(totals.proteinGrams)} / {formatMetric(goalProtein, 0)} g</strong></div>{proteinPercent == null ? <small>Brak pełnych danych o białku.</small> : <><ProgressBar value={proteinPercent} /><small>{proteinPercent}% dziennego celu</small></>}</div>}
     <div className="macros">{macro.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value == null ? '—' : `${formatMetric(value)} g`}</strong></div>)}</div>
     <div className="meals-head"><h3>Dzisiejsze wpisy</h3></div>
     <div className="meal-list">
@@ -176,8 +189,9 @@ function WeekProgress({ today }: { today: TodayResponse }) {
 }
 
 function RemainingWeek({ today }: { today: TodayResponse }) {
-  const remainingByDate = Object.entries(today.remainingWeek.reduce<Record<string, typeof today.remainingWeek>>((acc, item) => { (acc[item.date] ??= []).push(item); return acc; }, {}));
-  return <section className="panel compact widget-card"><header><h2><CalendarDays /> Pozostało w tym tygodniu</h2></header><div className="week-days">{remainingByDate.length === 0 ? <div className="empty">Na ten tydzień nie ma już więcej planów.</div> : remainingByDate.map(([date, items]) => <div className="day-card" key={date}><span>{shortDateLabel(date)}</span><Dumbbell size={19} /><strong>{items[0]?.title}</strong>{items.length > 1 && <em>+{items.length - 1} więcej</em>}</div>)}</div></section>;
+  const tomorrow = shiftDate(today.date, 1);
+  const tomorrowItems = today.remainingWeek.filter(item => item.date === tomorrow);
+  return <section className="panel compact widget-card"><header><h2><CalendarDays /> Aktywności jutro</h2></header><div className="week-days">{tomorrowItems.length === 0 ? <div className="empty">Brak zaplanowanych aktywności na jutro.</div> : tomorrowItems.map(item => <div className="day-card" key={item.id}><span>{shortDateLabel(tomorrow)}</span><Dumbbell size={19} /><strong>{item.title}</strong>{item.workoutStructure && <em>{workoutStructureText(item.workoutStructure)}</em>}</div>)}</div></section>;
 }
 
 function CoachPanel({ today }: { today: TodayResponse }) {
@@ -190,8 +204,10 @@ function HealthMetrics({ today }: { today: TodayResponse }) {
   const energy = today.energy;
   return <div className="metrics-grid widget-card widget-wide">
     <MetricCard icon={Weight} label="Masa ciała" value={today.latestMeasurement ? today.latestMeasurement.weightKg.toFixed(1) : '—'} unit={today.latestMeasurement ? 'kg' : ''} sub={sourceLabel(today.latestMeasurement?.source)} />
-    <MetricCard icon={HeartPulse} label="Tętno spoczynkowe" value={health?.restingHr?.toString() ?? '—'} unit={health?.restingHr ? 'bpm' : ''} sub={sourceLabel(health?.source)} />
+    <MetricCard icon={HeartPulse} label="Tętno spoczynkowe" value={health?.restingHr?.toString() ?? '—'} unit={health?.restingHr ? 'bpm' : ''} sub={health ? 'Garmin · wartość dzienna' : 'Brak danych Garmin'} />
     <MetricCard icon={Activity} label="HRV" value={health?.hrv?.toString() ?? '—'} unit={health?.hrv ? 'ms' : ''} sub={sourceLabel(health?.source)} />
+    <MetricCard icon={Building2} label="Piętra" value={health?.floorsAscended == null ? '—' : formatMetric(health.floorsAscended, 0)} sub={health ? 'Garmin · wejścia' : 'Brak danych Garmin'} />
+    <MetricCard icon={Timer} label="Aktywne minuty" value={health?.intensityMinutes == null ? '—' : formatMetric(health.intensityMinutes, 0)} unit={health?.intensityMinutes != null ? 'min' : ''} sub={health ? 'Garmin · dzisiaj' : 'Brak danych Garmin'} />
     <MetricCard icon={Moon} label="Sen" value={formatDuration(health?.sleepDurationSeconds)} sub={health ? 'Ostatnia noc' : 'Brak danych Garmin'} />
     <MetricCard icon={Flame} label="TDEE" value={energy ? formatMetric(energy.tdeeKcal, 0) : '—'} unit={energy ? 'kcal' : ''} sub={energy ? `Szacowane · aktywność ×${formatMetric(energy.activityFactor, 2)}` : 'Uzupełnij profil w Ustawieniach'} />
   </div>;
@@ -245,6 +261,15 @@ export default function App() {
     finally { setBusyId(null); }
   }
 
+  async function deleteActivityPlan(item: PlanItem) {
+    if (!api || busyId) return;
+    if (!window.confirm(`Usunąć aktywność „${item.title}”?`)) return;
+    setBusyId(item.id); setError(null);
+    try { await api.deletePlan(item.id); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Nie udało się usunąć aktywności.'); }
+    finally { setBusyId(null); }
+  }
+
   async function deleteNutrition(entry: NutritionEntry) {
     if (!api || deletingNutritionId) return;
     if (!window.confirm(`Usunąć wpis „${entry.title}”?`)) return;
@@ -267,7 +292,7 @@ export default function App() {
   function renderWidget(id: TodayWidgetId) {
     if (!today || !api) return null;
     if (id === 'health_metrics') return <HealthMetrics today={today} />;
-    if (id === 'activity') return <ActivityPanel api={api} date={date} today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} onError={setError} onReload={load} />;
+    if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} onDelete={(item) => void deleteActivityPlan(item)} />;
     if (id === 'nutrition') return <NutritionPanel today={today} onEdit={setEditingNutrition} onDelete={(entry) => void deleteNutrition(entry)} deletingId={deletingNutritionId} />;
     if (id === 'week_progress') return <WeekProgress today={today} />;
     if (id === 'remaining_week') return <RemainingWeek today={today} />;
