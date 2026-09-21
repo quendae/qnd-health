@@ -20,9 +20,9 @@ const createPlanSchema = z.object({
   kind: z.enum(['workout', 'metric_goal', 'count_goal', 'manual']),
   title: z.string().trim().min(1).max(200),
   completionStrategy: z.enum(['metric_auto', 'count_manual', 'activity_link', 'manual']),
-  metricKey: z.string().trim().min(1).max(100).optional(),
-  targetValue: z.number().positive().optional(),
-  unit: z.string().trim().min(1).max(40).optional(),
+  metricKey: z.string().trim().min(1).max(100).optional().nullable(),
+  targetValue: z.number().positive().optional().nullable(),
+  unit: z.string().trim().min(1).max(40).optional().nullable(),
   activityType: z.string().trim().min(1).max(80).nullable().optional(),
   plannedDurationSeconds: z.number().positive().nullable().optional(),
   plannedDistanceMeters: z.number().positive().nullable().optional(),
@@ -34,6 +34,19 @@ const createPlanSchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['metricKey'], message: 'metricKey is required for metric_auto goals' });
   }
 });
+
+const updatePlanSchema = z.object({
+  date: dateSchema.optional(),
+  kind: z.enum(['workout', 'metric_goal', 'count_goal', 'manual']).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  completionStrategy: z.enum(['metric_auto', 'count_manual', 'activity_link', 'manual']).optional(),
+  metricKey: z.string().trim().min(1).max(100).nullable().optional(),
+  targetValue: z.number().positive().nullable().optional(),
+  unit: z.string().trim().min(1).max(40).nullable().optional(),
+  activityType: z.string().trim().min(1).max(80).nullable().optional(),
+  plannedDurationSeconds: z.number().positive().nullable().optional(),
+  plannedDistanceMeters: z.number().positive().nullable().optional(),
+}).refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 const progressSchema = z.object({ value: z.number().nonnegative() });
 const activityLinkSchema = z.object({ completedActivityId: z.string().trim().min(1).max(200) });
@@ -134,6 +147,72 @@ export function registerPlanRoutes(
           body,
           entityId: created.id,
           auditSummary: { date: created.date, kind: created.kind, title: created.title },
+        };
+      },
+    });
+  });
+
+  app.patch('/api/v1/plans/:id', async (request, reply) => {
+    const actor = await requireScopes(request, authorizer, ['plans:write']);
+    const id = (request.params as { id?: string }).id;
+    if (!id) return sendValidationError(reply, request, 'Plan id is required');
+    const parsed = updatePlanSchema.safeParse(request.body);
+    if (!parsed.success) return sendValidationError(reply, request, 'Invalid plan update', parsed.error.flatten());
+    const existing = await planRepository.findById(id);
+    if (!existing) return reply.status(404).send(errorBody(request, 'not_found', 'Plan item not found'));
+
+    const merged = createPlanSchema.safeParse({ ...existing, ...parsed.data });
+    if (!merged.success) return sendValidationError(reply, request, 'Invalid plan update', merged.error.flatten());
+
+    return executeSafeWrite({
+      request,
+      reply,
+      tokenId: actor.tokenId,
+      route: `PATCH /api/v1/plans/${id}`,
+      requestBody: parsed.data,
+      auditRepository: deps.auditRepository,
+      idempotencyRepository: deps.idempotencyRepository,
+      action: 'plan.update',
+      entityType: 'PlanItem',
+      perform: async () => {
+        const updated = await planRepository.update(id, parsed.data);
+        if (!updated) throw new Error('Plan item disappeared during update');
+        const body = serializePlan(updated);
+        return {
+          statusCode: 200,
+          body,
+          entityId: id,
+          auditSummary: { date: body.date, kind: body.kind, title: body.title },
+        };
+      },
+    });
+  });
+
+  app.delete('/api/v1/plans/:id', async (request, reply) => {
+    const actor = await requireScopes(request, authorizer, ['plans:write']);
+    const id = (request.params as { id?: string }).id;
+    if (!id) return sendValidationError(reply, request, 'Plan id is required');
+    const existing = await planRepository.findById(id);
+    if (!existing) return reply.status(404).send(errorBody(request, 'not_found', 'Plan item not found'));
+
+    return executeSafeWrite({
+      request,
+      reply,
+      tokenId: actor.tokenId,
+      route: `DELETE /api/v1/plans/${id}`,
+      requestBody: {},
+      auditRepository: deps.auditRepository,
+      idempotencyRepository: deps.idempotencyRepository,
+      action: 'plan.delete',
+      entityType: 'PlanItem',
+      perform: async () => {
+        const deleted = await planRepository.delete(id);
+        if (!deleted) throw new Error('Plan item disappeared during delete');
+        return {
+          statusCode: 204,
+          body: null,
+          entityId: id,
+          auditSummary: { date: existing.date, kind: existing.kind, title: existing.title },
         };
       },
     });
