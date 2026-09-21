@@ -60,12 +60,12 @@ export function calculatePlanProgress(input: PlanProgressInput): PlanProgress {
       return calculateTargetProgress(input.targetValue, input.currentValue);
 
     case 'activity_link': {
-      const linked = Boolean(input.linkedActivityId);
+      const completed = Boolean(input.linkedActivityId) || input.manualCompleted === true;
       return {
-        status: linked ? 'completed' : 'planned',
+        status: completed ? 'completed' : 'planned',
         currentValue: null,
         targetValue: null,
-        ratio: linked ? 1 : 0,
+        ratio: completed ? 1 : 0,
       };
     }
 
@@ -84,8 +84,5 @@ export function calculatePlanProgress(input: PlanProgressInput): PlanProgress {
 export function assertManualProgressWritable(strategy: CompletionStrategy): void {
   if (strategy === 'metric_auto') {
     throw new Error('metric_auto progress is provider-derived');
-  }
-  if (strategy === 'activity_link') {
-    throw new Error('activity_link progress is controlled by activity linking');
   }
 }
