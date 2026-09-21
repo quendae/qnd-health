@@ -35,14 +35,18 @@ describe('calculatePlanProgress', () => {
     }).ratio).toBe(1);
   });
 
-  it('completes an activity-link item only when an activity is linked', () => {
+  it('completes an activity-link item when linked or explicitly completed manually', () => {
     expect(calculatePlanProgress({
       strategy: 'activity_link', linkedActivityId: null,
     }).status).toBe('planned');
 
     expect(calculatePlanProgress({
-      strategy: 'activity_link', linkedActivityId: 'activity-1',
-    }).status).toBe('completed');
+      strategy: 'activity_link', linkedActivityId: null, manualCompleted: true,
+    })).toMatchObject({ status: 'completed', ratio: 1 });
+
+    expect(calculatePlanProgress({
+      strategy: 'activity_link', linkedActivityId: 'activity-1', manualCompleted: true,
+    })).toMatchObject({ status: 'completed', ratio: 1 });
   });
 
   it('supports explicit manual completion', () => {
@@ -64,8 +68,9 @@ describe('assertManualProgressWritable', () => {
       .toThrow('metric_auto progress is provider-derived');
   });
 
-  it('allows manual counter and explicit manual strategies', () => {
+  it('allows manual counters, manual tasks and activity-link workouts', () => {
     expect(() => assertManualProgressWritable('count_manual')).not.toThrow();
     expect(() => assertManualProgressWritable('manual')).not.toThrow();
+    expect(() => assertManualProgressWritable('activity_link')).not.toThrow();
   });
 });
