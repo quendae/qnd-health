@@ -12,7 +12,7 @@ const optionalMetric = z.number().nonnegative().nullable().optional();
 const createSchema = z.object({
   measuredAt: timestampSchema,
   source: z.enum(['garmin', 'hermes', 'manual']).optional(),
-  transport: z.enum(['home_assistant', 'garmin_api', 'scale_screenshot']).nullable().optional(),
+  transport: z.enum(['home_assistant', 'garmin_api', 'scale_screenshot', 'manual_input']).nullable().optional(),
   weightKg: z.number().positive(),
   bodyFatPercent: optionalMetric,
   bmi: optionalMetric,
@@ -27,6 +27,11 @@ const createSchema = z.object({
   scaleBmrKcal: optionalMetric,
   metabolicAge: optionalMetric,
   physiqueRating: optionalMetric,
+  bicepsCircumferenceCm: optionalMetric,
+  chestCircumferenceCm: optionalMetric,
+  waistCircumferenceCm: optionalMetric,
+  hipsCircumferenceCm: optionalMetric,
+  thighCircumferenceCm: optionalMetric,
 });
 const listSchema = z.object({ from: timestampSchema.optional(), to: timestampSchema.optional() });
 
@@ -75,6 +80,11 @@ export function registerMeasurementRoutes(
           scaleBmrKcal: parsed.data.scaleBmrKcal ?? null,
           metabolicAge: parsed.data.metabolicAge ?? null,
           physiqueRating: parsed.data.physiqueRating ?? null,
+          bicepsCircumferenceCm: parsed.data.bicepsCircumferenceCm ?? null,
+          chestCircumferenceCm: parsed.data.chestCircumferenceCm ?? null,
+          waistCircumferenceCm: parsed.data.waistCircumferenceCm ?? null,
+          hipsCircumferenceCm: parsed.data.hipsCircumferenceCm ?? null,
+          thighCircumferenceCm: parsed.data.thighCircumferenceCm ?? null,
           transport: parsed.data.transport ?? null,
           source: parsed.data.source ?? 'hermes',
         });
