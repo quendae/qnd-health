@@ -13,6 +13,8 @@ import { registerHealthRoutes } from './health/routes.js';
 import type { CompletedActivityRepository } from './activities/repository.js';
 import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerActivityRoutes } from './activities/routes.js';
+import type { HealthProfileRepository } from './profile/repository.js';
+import { registerProfileRoutes } from './profile/routes.js';
 import { registerTodayRoutes } from './today/routes.js';
 import { registerInsightRoutes } from './insights/routes.js';
 import type { AuditRepository } from './audit/repository.js';
@@ -27,6 +29,7 @@ export interface BuildAppOptions {
   planRepository?: PlanRepository;
   nutritionRepository?: NutritionRepository;
   measurementRepository?: MeasurementRepository;
+  profileRepository?: HealthProfileRepository;
   dailyHealthRepository?: DailyHealthRepository;
   completedActivityRepository?: CompletedActivityRepository;
   activityMatchRepository?: ActivityMatchRepository;
@@ -76,6 +79,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   if (authorizer && options.measurementRepository) {
     registerMeasurementRoutes(app, { authorizer, measurementRepository: options.measurementRepository, auditRepository, idempotencyRepository });
   }
+  if (authorizer && options.profileRepository) {
+    registerProfileRoutes(app, {
+      authorizer,
+      profileRepository: options.profileRepository,
+      auditRepository,
+      idempotencyRepository,
+      timeZone,
+    });
+  }
   if (authorizer && options.planRepository && options.measurementRepository && options.dailyHealthRepository && options.completedActivityRepository) {
     registerInsightRoutes(app, {
       authorizer,
@@ -92,6 +104,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       planRepository: options.planRepository,
       nutritionRepository: options.nutritionRepository,
       measurementRepository: options.measurementRepository,
+      profileRepository: options.profileRepository,
       dailyHealthRepository: options.dailyHealthRepository,
       completedActivityRepository: options.completedActivityRepository,
       timeZone,
