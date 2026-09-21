@@ -15,8 +15,8 @@ describe('Coach chat view model', () => {
   });
 
   it('renders human-readable summaries for common Coach actions', () => {
-    expect(coachActionLabel({ toolCallId: 'a', name: 'set_default_step_goal', status: 'completed', result: { defaultStepsGoal: 8000 } })).toBe('Cel kroków zmieniony na 8 000');
-    expect(coachActionLabel({ toolCallId: 'b', name: 'set_calorie_goal', status: 'completed', result: { dailyCaloriesGoalKcal: 2200 } })).toBe('Cel kalorii zmieniony na 2 200 kcal');
+    expect(coachActionLabel({ toolCallId: 'a', name: 'set_default_step_goal', status: 'completed', result: { defaultStepsGoal: 8000 } })).toBe('Cel kroków zmieniony na 8000');
+    expect(coachActionLabel({ toolCallId: 'b', name: 'set_calorie_goal', status: 'completed', result: { dailyCaloriesGoalKcal: 2200 } })).toBe('Cel kalorii zmieniony na 2200 kcal');
     expect(coachActionLabel({ toolCallId: 'c', name: 'set_protein_goal', status: 'completed', result: { dailyProteinGoalGrams: 160 } })).toBe('Cel białka zmieniony na 160 g');
   });
 
