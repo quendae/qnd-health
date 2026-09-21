@@ -10,6 +10,8 @@ import { errorBody, sendValidationError } from '../http/errors.js';
 import type { PlanRepository, StoredPlanItem } from './repository.js';
 import type { AuditRepository } from '../audit/repository.js';
 import type { IdempotencyRepository } from '../idempotency/repository.js';
+import type { CompletedActivityRepository } from '../activities/repository.js';
+import type { ActivityMatchRepository } from '../activities/matches.js';
 import { executeSafeWrite } from '../writes/safe-write.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must use YYYY-MM-DD');
@@ -34,6 +36,7 @@ const createPlanSchema = z.object({
 });
 
 const progressSchema = z.object({ value: z.number().nonnegative() });
+const activityLinkSchema = z.object({ completedActivityId: z.string().trim().min(1).max(200) });
 const listQuerySchema = z.object({ from: dateSchema.optional(), to: dateSchema.optional() });
 
 function progressFor(plan: StoredPlanItem) {
@@ -59,11 +62,19 @@ async function requireScopes(
   return authorizer.authorize(request.headers.authorization, scopes);
 }
 
+async function findCompletedActivity(repository: CompletedActivityRepository, id: string) {
+  if (repository.findById) return repository.findById(id);
+  const items = await repository.list();
+  return items.find((item) => item.id === id) ?? null;
+}
+
 export function registerPlanRoutes(
   app: FastifyInstance,
   deps: {
     authorizer: RequestAuthorizer;
     planRepository: PlanRepository;
+    completedActivityRepository?: CompletedActivityRepository;
+    activityMatchRepository?: ActivityMatchRepository;
     auditRepository: AuditRepository;
     idempotencyRepository: IdempotencyRepository;
   },
@@ -175,4 +186,81 @@ export function registerPlanRoutes(
       },
     });
   });
+
+  if (deps.completedActivityRepository && deps.activityMatchRepository) {
+    app.post('/api/v1/plans/:id/activity', async (request, reply) => {
+      const actor = await requireScopes(request, authorizer, ['plans:write', 'activities:read']);
+      const id = (request.params as { id?: string }).id;
+      if (!id) return sendValidationError(reply, request, 'Plan id is required');
+      const parsed = activityLinkSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(reply, request, 'Invalid completed activity', parsed.error.flatten());
+
+      const plan = await planRepository.findById(id);
+      if (!plan) return reply.status(404).send(errorBody(request, 'not_found', 'Plan item not found'));
+      if (plan.completionStrategy !== 'activity_link') {
+        return sendValidationError(reply, request, 'This plan item is not completed by linking an activity');
+      }
+      const activity = await findCompletedActivity(deps.completedActivityRepository!, parsed.data.completedActivityId);
+      if (!activity) return reply.status(404).send(errorBody(request, 'not_found', 'Completed activity not found'));
+
+      return executeSafeWrite({
+        request,
+        reply,
+        tokenId: actor.tokenId,
+        route: `POST /api/v1/plans/${id}/activity`,
+        requestBody: parsed.data,
+        auditRepository: deps.auditRepository,
+        idempotencyRepository: deps.idempotencyRepository,
+        action: 'plan.activity.attach',
+        entityType: 'PlanItem',
+        perform: async () => {
+          await deps.activityMatchRepository!.attach(id, activity.id);
+          const updated = await planRepository.update(id, { status: 'completed', linkedActivityId: activity.id });
+          if (!updated) throw new Error('Plan item disappeared while attaching activity');
+          const body = serializePlan({ ...updated, linkedActivityId: activity.id });
+          return {
+            statusCode: 200,
+            body,
+            entityId: id,
+            auditSummary: { completedActivityId: activity.id, provider: activity.provider, activityType: activity.activityType },
+          };
+        },
+      });
+    });
+
+    app.delete('/api/v1/plans/:id/activity', async (request, reply) => {
+      const actor = await requireScopes(request, authorizer, ['plans:write']);
+      const id = (request.params as { id?: string }).id;
+      if (!id) return sendValidationError(reply, request, 'Plan id is required');
+      const plan = await planRepository.findById(id);
+      if (!plan) return reply.status(404).send(errorBody(request, 'not_found', 'Plan item not found'));
+      if (plan.completionStrategy !== 'activity_link') {
+        return sendValidationError(reply, request, 'This plan item is not completed by linking an activity');
+      }
+
+      return executeSafeWrite({
+        request,
+        reply,
+        tokenId: actor.tokenId,
+        route: `DELETE /api/v1/plans/${id}/activity`,
+        requestBody: {},
+        auditRepository: deps.auditRepository,
+        idempotencyRepository: deps.idempotencyRepository,
+        action: 'plan.activity.detach',
+        entityType: 'PlanItem',
+        perform: async () => {
+          await deps.activityMatchRepository!.detach(id);
+          const updated = await planRepository.update(id, { status: 'planned', linkedActivityId: null });
+          if (!updated) throw new Error('Plan item disappeared while detaching activity');
+          const body = serializePlan({ ...updated, linkedActivityId: null });
+          return {
+            statusCode: 200,
+            body,
+            entityId: id,
+            auditSummary: { detachedActivityId: plan.linkedActivityId ?? null },
+          };
+        },
+      });
+    });
+  }
 }

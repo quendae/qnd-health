@@ -10,4 +10,5 @@ export interface CompletedActivityRecord {
 
 export interface CompletedActivityRepository {
   list(from?: string, to?: string): Promise<CompletedActivityRecord[]>;
+  findById?(id: string): Promise<CompletedActivityRecord | null>;
 }

@@ -10,6 +10,7 @@ import type { MeasurementRepository } from './measurements/repository.js';
 import { registerMeasurementRoutes } from './measurements/routes.js';
 import type { DailyHealthRepository } from './health/repository.js';
 import type { CompletedActivityRepository } from './activities/repository.js';
+import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerTodayRoutes } from './today/routes.js';
 import type { AuditRepository } from './audit/repository.js';
 import { noopAuditRepository } from './audit/repository.js';
@@ -25,6 +26,7 @@ export interface BuildAppOptions {
   measurementRepository?: MeasurementRepository;
   dailyHealthRepository?: DailyHealthRepository;
   completedActivityRepository?: CompletedActivityRepository;
+  activityMatchRepository?: ActivityMatchRepository;
   auditRepository?: AuditRepository;
   idempotencyRepository?: IdempotencyRepository;
   timeZone?: string;
@@ -43,7 +45,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const idempotencyRepository = options.idempotencyRepository ?? noopIdempotencyRepository;
 
   if (authorizer && options.planRepository) {
-    registerPlanRoutes(app, { authorizer, planRepository: options.planRepository, auditRepository, idempotencyRepository });
+    registerPlanRoutes(app, {
+      authorizer,
+      planRepository: options.planRepository,
+      completedActivityRepository: options.completedActivityRepository,
+      activityMatchRepository: options.activityMatchRepository,
+      auditRepository,
+      idempotencyRepository,
+    });
   }
   if (authorizer && options.nutritionRepository) {
     registerNutritionRoutes(app, { authorizer, nutritionRepository: options.nutritionRepository, auditRepository, idempotencyRepository });
