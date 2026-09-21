@@ -4,6 +4,10 @@ export function visibleCoachMessages(messages: CoachMessage[]): CoachMessage[] {
   return messages.filter(message => message.role === 'user' || message.role === 'assistant');
 }
 
+export function transientCoachActions(kind: 'success' | 'partial_error', actions: CoachAction[]): CoachAction[] {
+  return kind === 'partial_error' ? actions : [];
+}
+
 function numberFromResult(result: unknown, key: string): number | null {
   if (!result || typeof result !== 'object') return null;
   const value = (result as Record<string, unknown>)[key];
