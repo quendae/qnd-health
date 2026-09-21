@@ -110,7 +110,7 @@ describe('Coach conversation API', () => {
     await app.close();
   });
 
-  it('keeps completed actions and returns them when the provider fails afterwards', async () => {
+  it('keeps only current-turn completed actions when the provider fails afterwards', async () => {
     let call = 0;
     const { app, coachRepository, profileRepository, audits } = await setup({
       async completeTurn() {
@@ -120,18 +120,26 @@ describe('Coach conversation API', () => {
       },
     });
     const conversation = await coachRepository.createConversation('Test');
+    await coachRepository.addMessage({
+      conversationId: conversation.id,
+      role: 'tool',
+      content: JSON.stringify({ defaultStepsGoal: 7000 }),
+      model: 'deepseek-flash',
+      toolMetadata: { toolCallId: 'old-tc', name: 'set_default_step_goal', status: 'completed' },
+    });
+
     const response = await app.inject({
       method: 'POST', url: `/api/v1/coach/conversations/${conversation.id}/messages`, headers: { authorization: 'Bearer web' },
       payload: { content: 'Ustaw 9000 kroków.' },
     });
 
     expect(response.statusCode).toBe(502);
-    expect(response.json()).toMatchObject({
-      error: { code: 'coach_provider_error' },
-      completedActions: [{ toolCallId: 'tc2', name: 'set_default_step_goal', status: 'completed' }],
-    });
+    expect(response.json()).toMatchObject({ error: { code: 'coach_provider_error' } });
+    expect(response.json().completedActions).toEqual([
+      expect.objectContaining({ toolCallId: 'tc2', name: 'set_default_step_goal', status: 'completed' }),
+    ]);
     expect(profileRepository.current?.defaultStepsGoal).toBe(9000);
-    expect(coachRepository.messages.map(message => message.role)).toEqual(['user', 'tool']);
+    expect(coachRepository.messages.slice(-2).map(message => message.role)).toEqual(['user', 'tool']);
     expect(audits).toHaveLength(1);
     await app.close();
   });
