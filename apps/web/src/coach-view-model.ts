@@ -23,15 +23,8 @@ export function coachActionLabel(action: CoachAction): string {
     const steps = numberFromResult(action.result, 'defaultStepsGoal');
     return steps == null ? 'Cel kroków został zmieniony' : `Cel kroków zmieniony na ${formatWhole(steps)}`;
   }
-  if (action.name === 'set_calorie_goal') {
-    const kcal = numberFromResult(action.result, 'dailyCaloriesGoalKcal');
-    return kcal == null ? 'Cel kalorii został zmieniony' : `Cel kalorii zmieniony na ${formatWhole(kcal)} kcal`;
-  }
-  if (action.name === 'set_protein_goal') {
-    const grams = numberFromResult(action.result, 'dailyProteinGoalGrams');
-    return grams == null ? 'Cel białka został zmieniony' : `Cel białka zmieniony na ${formatWhole(grams)} g`;
-  }
-  if (action.name === 'add_nutrition') return 'Dodano wpis żywieniowy';
+  if (action.name === 'update_profile') return 'Profil i cele zostały zaktualizowane';
+  if (action.name === 'create_nutrition') return 'Dodano wpis żywieniowy';
   if (action.name === 'update_nutrition') return 'Zmieniono wpis żywieniowy';
   if (action.name === 'delete_nutrition') return 'Usunięto wpis żywieniowy';
   if (action.name === 'create_plan') return 'Dodano pozycję do planu';
@@ -39,8 +32,8 @@ export function coachActionLabel(action: CoachAction): string {
   if (action.name === 'delete_plan') return 'Usunięto pozycję z planu';
   if (action.name === 'set_plan_progress') return 'Zaktualizowano wykonanie planu';
   if (action.name === 'attach_activity') return 'Połączono aktywność z planem';
-  if (action.name === 'detach_activity') return 'Odłączono aktywność od planu';
-  if (action.name === 'add_measurement') return 'Dodano pomiar';
+  if (action.name === 'create_custom_activity') return 'Dodano wykonaną aktywność';
+  if (action.name === 'create_measurement') return 'Dodano pomiar';
   return 'Zmiana zapisana przez Coacha';
 }
 
