@@ -59,7 +59,7 @@ export function ProfileSettings({
       <div><h2>Profil zdrowotny</h2><p>Dane do celów oraz szacowania BMR/TDEE</p></div>
     </header>
 
-    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to osobny szacunek wydatku energii. Dzienny cel kcal ustawiasz ręcznie — aplikacja nie zakłada automatycznie deficytu.</p>
+    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to osobny szacunek wydatku energii. Cele kcal i białka ustawiasz ręcznie — aplikacja nie narzuca deficytu ani makr.</p>
 
     {loading ? <div className="empty">Wczytywanie profilu…</div> : <>
       <div className="profile-form">
@@ -87,6 +87,10 @@ export function ProfileSettings({
         <label>Dzienny cel kcal
           <input type="number" min="1" max="20000" step="50" value={form.dailyCaloriesGoalKcal} onChange={event => update('dailyCaloriesGoalKcal', event.target.value)} placeholder="np. 2200" />
           <small>Pozostaw puste, jeśli nie chcesz śledzić celu kalorii. To cel ręczny, niezależny od TDEE.</small>
+        </label>
+        <label>Dzienny cel białka (g)
+          <input type="number" min="1" max="1000" step="5" value={form.dailyProteinGoalGrams} onChange={event => update('dailyProteinGoalGrams', event.target.value)} placeholder="np. 160" />
+          <small>Pozostaw puste, jeśli nie chcesz śledzić celu białka. Postęp pokażemy na Dzisiaj i w Postępach.</small>
         </label>
       </div>
 
