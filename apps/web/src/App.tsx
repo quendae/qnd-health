@@ -135,13 +135,25 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
   deletingId: string | null;
 }) {
   const { totals } = today.nutrition.summary;
+  const goalKcal = today.nutrition.goalKcal;
+  const caloriePercent = totals.caloriesKcal != null && goalKcal != null && goalKcal > 0
+    ? Math.round((totals.caloriesKcal / goalKcal) * 100)
+    : null;
+  const calorieDelta = totals.caloriesKcal != null && goalKcal != null ? goalKcal - totals.caloriesKcal : null;
   const macro = [
     ['Białko', totals.proteinGrams], ['Węglowodany', totals.carbsGrams],
     ['Tłuszcz', totals.fatGrams], ['Błonnik', totals.fiberGrams],
   ] as const;
   return <section className="panel nutrition-panel widget-card">
     <header><div><h2><Utensils /> Odżywianie</h2><p>Podsumowanie tego, co zostało zapisane.</p></div><span className="section-link orange">Dzienny bilans</span></header>
-    <div className="calorie-head"><strong>{formatMetric(totals.caloriesKcal, 0)} <small>{totals.caloriesKcal == null ? '' : 'kcal'}</small></strong><span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span></div>
+    <div className="calorie-head calorie-goal-head">
+      <div className="calorie-goal-copy">
+        <strong>{formatMetric(totals.caloriesKcal, 0)}{goalKcal != null ? ` / ${formatMetric(goalKcal, 0)}` : ''} <small>{totals.caloriesKcal == null && goalKcal == null ? '' : 'kcal'}</small></strong>
+        {caloriePercent != null && <div className="calorie-goal-progress"><ProgressBar tone="orange" value={caloriePercent} /><span>{caloriePercent}% celu · {calorieDelta! >= 0 ? `${formatMetric(calorieDelta, 0)} kcal zostało` : `${formatMetric(Math.abs(calorieDelta!), 0)} kcal ponad cel`}</span></div>}
+        {goalKcal == null && <small className="calorie-goal-empty">Cel kcal możesz ustawić w Ustawieniach.</small>}
+      </div>
+      <span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span>
+    </div>
     <div className="macros">{macro.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value == null ? '—' : `${formatMetric(value)} g`}</strong></div>)}</div>
     <div className="meals-head"><h3>Dzisiejsze wpisy</h3></div>
     <div className="meal-list">
