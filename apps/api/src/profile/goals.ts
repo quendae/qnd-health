@@ -23,16 +23,6 @@ export interface GoalRevisionMetadata {
   reason: string | null;
 }
 
-const goalKeys = [
-  'activityFactor',
-  'defaultStepsGoal',
-  'dailyCaloriesGoalKcal',
-  'dailyProteinGoalGrams',
-  'dailyCarbsGoalGrams',
-  'dailyFatGoalGrams',
-  'dailyFiberGoalGrams',
-] as const satisfies readonly (keyof ProfileGoalValues)[];
-
 function assertIsoDate(value: string): void {
   if (!isoDatePattern.test(value)) throw new Error('effectiveFrom must be YYYY-MM-DD');
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -119,21 +109,24 @@ export class ProfileGoalService {
     assertIsoDate(meta.effectiveFrom);
     const current = await this.resolve(meta.effectiveFrom);
     const next: ProfileGoalValues = {
-      activityFactor: current.activityFactor,
-      defaultStepsGoal: current.defaultStepsGoal,
-      dailyCaloriesGoalKcal: current.dailyCaloriesGoalKcal,
-      dailyProteinGoalGrams: current.dailyProteinGoalGrams,
-      dailyCarbsGoalGrams: current.dailyCarbsGoalGrams,
-      dailyFatGoalGrams: current.dailyFatGoalGrams,
-      dailyFiberGoalGrams: current.dailyFiberGoalGrams,
+      activityFactor: patch.activityFactor !== undefined ? patch.activityFactor : current.activityFactor,
+      defaultStepsGoal: patch.defaultStepsGoal !== undefined ? patch.defaultStepsGoal : current.defaultStepsGoal,
+      dailyCaloriesGoalKcal: patch.dailyCaloriesGoalKcal !== undefined
+        ? patch.dailyCaloriesGoalKcal
+        : current.dailyCaloriesGoalKcal,
+      dailyProteinGoalGrams: patch.dailyProteinGoalGrams !== undefined
+        ? patch.dailyProteinGoalGrams
+        : current.dailyProteinGoalGrams,
+      dailyCarbsGoalGrams: patch.dailyCarbsGoalGrams !== undefined
+        ? patch.dailyCarbsGoalGrams
+        : current.dailyCarbsGoalGrams,
+      dailyFatGoalGrams: patch.dailyFatGoalGrams !== undefined
+        ? patch.dailyFatGoalGrams
+        : current.dailyFatGoalGrams,
+      dailyFiberGoalGrams: patch.dailyFiberGoalGrams !== undefined
+        ? patch.dailyFiberGoalGrams
+        : current.dailyFiberGoalGrams,
     };
-
-    for (const key of goalKeys) {
-      const value = patch[key];
-      if (value !== undefined) {
-        (next as Record<string, unknown>)[key] = value;
-      }
-    }
 
     validateGoals(next);
     return this.revisions.create({
