@@ -15,6 +15,8 @@ import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerActivityRoutes } from './activities/routes.js';
 import type { HealthProfileRepository } from './profile/repository.js';
 import { registerProfileRoutes } from './profile/routes.js';
+import type { CoachRepository } from './coach/repository.js';
+import { registerCoachRoutes, type CoachTurnProvider } from './coach/routes.js';
 import { registerTodayRoutes } from './today/routes.js';
 import { registerInsightRoutes } from './insights/routes.js';
 import type { AuditRepository } from './audit/repository.js';
@@ -33,6 +35,9 @@ export interface BuildAppOptions {
   dailyHealthRepository?: DailyHealthRepository;
   completedActivityRepository?: CompletedActivityRepository;
   activityMatchRepository?: ActivityMatchRepository;
+  coachRepository?: CoachRepository;
+  deepseekClient?: CoachTurnProvider | null;
+  coachModel?: string;
   auditRepository?: AuditRepository;
   idempotencyRepository?: IdempotencyRepository;
   timeZone?: string;
@@ -85,6 +90,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       profileRepository: options.profileRepository,
       auditRepository,
       idempotencyRepository,
+      timeZone,
+    });
+  }
+  if (authorizer && options.coachRepository) {
+    registerCoachRoutes(app, {
+      authorizer,
+      coachRepository: options.coachRepository,
+      deepseekClient: options.deepseekClient ?? null,
+      coachModel: options.coachModel ?? 'deepseek-flash',
+      planRepository: options.planRepository,
+      nutritionRepository: options.nutritionRepository,
+      measurementRepository: options.measurementRepository,
+      profileRepository: options.profileRepository,
+      dailyHealthRepository: options.dailyHealthRepository,
+      completedActivityRepository: options.completedActivityRepository,
+      activityMatchRepository: options.activityMatchRepository,
+      auditRepository,
       timeZone,
     });
   }
