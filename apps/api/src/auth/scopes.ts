@@ -4,7 +4,7 @@ export const apiScopes = [
   'activities:read', 'activities:write',
   'nutrition:read', 'nutrition:write',
   'measurements:read', 'measurements:write',
-  'health:read',
+  'health:read', 'health:write',
   'progress:read',
   'coach:read', 'coach:write',
 ] as const;
