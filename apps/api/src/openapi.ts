@@ -42,9 +42,9 @@ export const openApiDocument = {
     '/api/v1/today': { get: { summary: 'Read the composed Today Hub model', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Today Hub data', content: { 'application/json': { schema: { $ref: '#/components/schemas/TodayResponse' } } } } } } },
     '/api/v1/activities': {
       get: {
-        summary: 'List completed activities for a local calendar day', security: [{ bearerAuth: [] }],
+        summary: 'List imported completed activities for a local calendar day', security: [{ bearerAuth: [] }],
         parameters: [{ name: 'date', in: 'query', required: true, schema: { type: 'string', format: 'date' } }],
-        responses: { '200': { description: 'Completed activities', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/CompletedActivity' } } } } } } }, '422': { description: 'Invalid date' } },
+        responses: { '200': { description: 'Completed activities from Garmin/FIT/manual providers already stored in QND Health', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/CompletedActivity' } } } } } } }, '422': { description: 'Invalid date' } },
       },
     },
     '/api/v1/plans': {
