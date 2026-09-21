@@ -36,6 +36,7 @@ function profileRepository() {
         heightCm: null,
         activityFactor: 1.2,
         defaultStepsGoal: 7500,
+        dailyCaloriesGoalKcal: null,
         ...(stored ?? {}),
         ...patch,
       };
@@ -64,13 +65,13 @@ describe('Health Profile API', () => {
 
     const patched = await app.inject({
       method: 'PATCH', url: '/api/v1/profile', headers: auth(),
-      payload: { dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180 },
+      payload: { dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180, dailyCaloriesGoalKcal: 2200 },
     });
 
     expect(patched.statusCode).toBe(200);
     expect(patched.json()).toMatchObject({
       id: 'default', dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180,
-      activityFactor: 1.2, defaultStepsGoal: 7500,
+      activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: 2200,
     });
 
     const read = await app.inject({ method: 'GET', url: '/api/v1/profile', headers: auth(readerToken) });
@@ -87,6 +88,7 @@ describe('Health Profile API', () => {
       { heightCm: 0 },
       { activityFactor: 0.9 },
       { defaultStepsGoal: 0 },
+      { dailyCaloriesGoalKcal: 0 },
     ]) {
       const response = await app.inject({ method: 'PATCH', url: '/api/v1/profile', headers: auth(), payload });
       expect(response.statusCode).toBe(422);
