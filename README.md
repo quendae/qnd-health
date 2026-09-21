@@ -2,16 +2,16 @@
 
 Private, self-hosted activity, nutrition and recovery planner with Garmin integration, Hermes API and an AI Coach layer.
 
-The primary deployment target is **Synology DSM without Docker**: one Node.js process, one SQLite database file and one HTTP port. The built React frontend is served directly by Fastify.
+The current production target is a **Debian 13 LXC** running one Node.js process and one SQLite database. Synology DSM remains the reverse proxy in front of the application.
 
 ## Runtime layout
 
 ```text
 fit.qqnd.fyi
     |
-DSM Reverse Proxy
+Synology / reverse proxy
     |
-127.0.0.1:3001
+Debian LXC :3001
     |
 QND Health / Node.js
   |- React frontend
@@ -20,73 +20,100 @@ QND Health / Node.js
   `- data/qnd-health.db (SQLite)
 ```
 
-## Synology prerequisites
+## Debian LXC prerequisites
 
-- Node.js 22 installed in DSM
-- SSH access
+- Debian 13
+- Node.js 22
 - Git
 - pnpm 10.17.1 (or Corepack)
-- optional but recommended: PM2
+- systemd
+- optional: curl for the post-update health check
 
-Check the actual executable paths before creating a DSM boot task:
+Production checkout used by the current deployment:
 
 ```bash
-which node
-which npm
-which pnpm
-which pm2
+/opt/qnd-health
 ```
 
-## First install on Synology
+The service name defaults to:
 
-Example location:
+```text
+qnd-health
+```
+
+The app must use `HOST=0.0.0.0` inside the LXC when the reverse proxy connects to the LXC address.
+
+## First install
 
 ```bash
-mkdir -p /volume1/apps
-cd /volume1/apps
+cd /opt
 git clone https://github.com/quendae/qnd-health.git
 cd qnd-health
 git checkout feat/today-hub-mvp
-cp .env.synology.example .env
+cp .env.example .env
+pnpm install
+pnpm --filter @qnd-health/api prisma:generate
+pnpm --filter @qnd-health/api prisma:push
+pnpm build
 ```
 
-Edit `.env` and replace `TOKEN_PEPPER` with a long random secret. Keep this value stable after tokens have been issued.
+Keep `TOKEN_PEPPER` stable after tokens have been issued.
 
-Then run:
+## One-command update
+
+### Directly on the Debian LXC
 
 ```bash
-./scripts/synology-install.sh
+cd /opt/qnd-health
+bash update.sh
 ```
 
-The script creates `data/`, `logs/` and `backups/`, installs dependencies, builds both frontend and backend, and initializes `data/qnd-health.db`.
+`update.sh` performs the complete production update sequence:
 
-### Start
+1. verifies that tracked files have no local edits,
+2. `git pull --ff-only`,
+3. installs dependencies,
+4. generates Prisma Client,
+5. builds the frontend and backend before downtime,
+6. backs up `data/qnd-health.db` into `backups/`,
+7. stops `qnd-health`,
+8. runs `prisma:push`,
+9. restarts the systemd service,
+10. checks `http://127.0.0.1:3001/api/v1/health` when `curl` is available.
 
-PM2 is recommended:
-
-```bash
-npm install -g pm2
-./scripts/synology-start.sh
-```
-
-Without PM2 the same script falls back to a background Node process and PID file.
-
-The application listens only on:
+Environment overrides are available when necessary:
 
 ```text
-http://127.0.0.1:3001
+QND_HEALTH_SERVICE
+QND_HEALTH_DB_FILE
+QND_HEALTH_BACKUP_DIR
+QND_HEALTH_HEALTH_URL
 ```
 
-### DSM Reverse Proxy
+### From a Windows PC
 
-In DSM configure a reverse proxy:
+The repository also contains `update.bat`. It connects to the LXC over Windows OpenSSH, pulls the newest repository version and runs the Linux updater remotely.
 
-```text
-Source:      https://fit.qqnd.fyi:443
-Destination: http://127.0.0.1:3001
+One-time setup example:
+
+```bat
+setx QND_HEALTH_HOST root@192.168.1.50
 ```
 
-TLS can remain managed by DSM.
+Open a new terminal after `setx`, then future updates are simply:
+
+```bat
+update.bat
+```
+
+You can also pass the target explicitly:
+
+```bat
+update.bat root@192.168.1.50
+update.bat root@192.168.1.50 /opt/qnd-health
+```
+
+SSH key authentication is recommended so `update.bat` can run without asking for the remote password each time.
 
 ## Create API tokens
 
@@ -98,10 +125,10 @@ Browser token:
 pnpm token:create -- --name web --scopes today:read,plans:read,plans:write,activities:read,nutrition:read,nutrition:write,measurements:read,measurements:write,health:read,progress:read
 ```
 
-Hermes token:
+Hermes / Home Assistant bridge token:
 
 ```bash
-pnpm token:create -- --name hermes --scopes today:read,plans:read,plans:write,activities:read,nutrition:read,nutrition:write,measurements:read,measurements:write,health:read,progress:read,coach:read,coach:write
+pnpm token:create -- --name hermes-ha --scopes today:read,plans:read,plans:write,activities:read,activities:write,nutrition:read,nutrition:write,measurements:read,measurements:write,health:read,health:write,progress:read,coach:read,coach:write
 ```
 
 Hermes can discover the API contract at:
@@ -110,44 +137,30 @@ Hermes can discover the API contract at:
 https://fit.qqnd.fyi/api/openapi.json
 ```
 
-## DSM autostart
+## systemd
 
-After starting with PM2, run:
+The production service is expected to run from `/opt/qnd-health` and load the repository `.env` file. A typical unit uses:
 
-```bash
-pm2 save
+```text
+WorkingDirectory=/opt/qnd-health
+EnvironmentFile=/opt/qnd-health/.env
+ExecStart=/usr/bin/pnpm start
 ```
 
-Then create a DSM **Control Panel -> Task Scheduler -> Triggered Task -> Boot-up** task. Use the executable paths returned by `which` on your NAS. Example:
+After changing a unit file:
 
 ```bash
-export PATH=/usr/local/bin:/usr/bin:/bin:$PATH
-cd /volume1/apps/qnd-health
-pm2 resurrect
+systemctl daemon-reload
+systemctl enable --now qnd-health
 ```
 
-If DSM's scheduled-task PATH does not include Node/PM2, use their absolute paths.
+## Reverse proxy
 
-## Update
-
-```bash
-cd /volume1/apps/qnd-health
-./scripts/synology-update.sh
-```
-
-This creates a backup, performs `git pull --ff-only`, installs dependencies, rebuilds, updates the SQLite schema and restarts the service.
+Expose HTTPS at `fit.qqnd.fyi` through Synology/Caddy/reverse proxy and forward internally to the Debian LXC on port 3001. Port 3001 does not need to be exposed publicly.
 
 ## Backup
 
-Manual backup:
-
-```bash
-./scripts/synology-backup.sh
-```
-
-Backups are written to `backups/` and files older than 30 days are removed. If the `sqlite3` CLI is available the online backup command is used. Otherwise QND Health is stopped briefly for a consistent file copy.
-
-For automatic backups create a daily DSM scheduled task invoking this script. Back up both the repository `.env` file separately and the `backups/` directory with Hyper Backup if desired.
+`update.sh` automatically takes a database snapshot before `prisma:push`. For independent scheduled backups, copy `data/qnd-health.db` and keep `.env` / `TOKEN_PEPPER` protected separately.
 
 ## Native development / smoke test
 
@@ -163,11 +176,15 @@ The native smoke test creates a temporary SQLite database, starts the compiled N
 
 ## Optional Docker fallback
 
-Docker is no longer required. A single-container `docker-compose.yml` remains available as a fallback and uses the same SQLite database under `./data/`.
+Docker is not required. A single-container `docker-compose.yml` remains available as a fallback and uses the same SQLite database under `./data/`.
+
+## Legacy Synology runtime
+
+Scripts under `scripts/synology-*.sh` remain for the earlier DSM-native deployment. Prisma CLI was unreliable on the target DSM runtime, so Debian LXC is the supported production path going forward.
 
 ## Security notes
 
-- QND Health binds to loopback by default. Expose it through DSM Reverse Proxy rather than opening port 3001 to the internet.
 - Keep `.env`, `TOKEN_PEPPER`, Garmin credentials and DeepSeek credentials private.
 - Use separate browser and Hermes API tokens so either can be revoked independently.
 - The public site and Hermes API share the same origin (`fit.qqnd.fyi`) but authorization scopes are enforced by the API.
+- Prefer SSH keys for `update.bat`; do not hard-code an SSH password in the batch file.
