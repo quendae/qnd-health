@@ -89,7 +89,9 @@ function profileData(patch: HealthProfilePatch) {
 function mapDailyHealth(row: any): DailyHealthRecord {
   return {
     date: formatDateOnly(row.date), source: row.source, transport: row.transport ?? null,
-    steps: row.steps ?? null, stepsGoal: row.stepsGoal ?? null, floorsAscended: row.floorsAscended ?? null,
+    steps: row.steps ?? null, stepsGoal: row.stepsGoal ?? null,
+    floorsAscended: row.floorsAscended ?? null, floorsDescended: row.floorsDescended ?? null,
+    vo2Max: row.vo2Max ?? null, providerBmrKcal: row.providerBmrKcal ?? null,
     intensityMinutes: row.intensityMinutes ?? null, restingHr: row.restingHr ?? null,
     hrv: row.hrv ?? null, stress: row.stress ?? null, bodyBattery: row.bodyBattery ?? null,
     sleepDurationSeconds: row.sleepDurationSeconds ?? null, sleepStages: row.sleepStagesJson ?? null,
@@ -102,7 +104,9 @@ function mapDailyHealth(row: any): DailyHealthRecord {
 function dailyHealthData(input: DailyHealthUpsert) {
   return {
     date: dateOnly(input.date), source: input.source, transport: input.transport ?? null,
-    steps: input.steps ?? null, stepsGoal: input.stepsGoal ?? null, floorsAscended: input.floorsAscended ?? null,
+    steps: input.steps ?? null, stepsGoal: input.stepsGoal ?? null,
+    floorsAscended: input.floorsAscended ?? null, floorsDescended: input.floorsDescended ?? null,
+    vo2Max: input.vo2Max ?? null, providerBmrKcal: input.providerBmrKcal ?? null,
     intensityMinutes: input.intensityMinutes ?? null, restingHr: input.restingHr ?? null,
     hrv: input.hrv ?? null, stress: input.stress ?? null, bodyBattery: input.bodyBattery ?? null,
     sleepDurationSeconds: input.sleepDurationSeconds ?? null, sleepStagesJson: input.sleepStages ?? null,
