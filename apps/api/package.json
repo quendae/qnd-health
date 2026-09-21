@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
     "prisma:generate": "prisma generate --config ../../prisma.config.ts",
-    "prisma:push": "prisma db push --config ../../prisma.config.ts"
+    "prisma:push": "prisma db push --config ../../prisma.config.ts",
+    "token:create": "pnpm prisma:generate && tsx src/scripts/create-token.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
