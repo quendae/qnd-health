@@ -8,13 +8,14 @@ Branch: `feat/today-hub-mvp`
 
 Extend the current QND Health MVP so it becomes more useful as a daily health cockpit rather than only a read-only dashboard.
 
-This slice has five outcomes:
+This slice has six outcomes:
 
 1. Steps are always visible in the Activity section, with a Garmin/HA-derived goal when available and a fallback goal of 7,500 steps.
-2. Nutrition becomes editable from both the UI and API, while the Today presentation is simplified and numeric output is human-readable.
-3. Body Battery is removed from the primary health strip and replaced with energy-expenditure information based on BMR/TDEE.
-4. Additional Garmin metrics such as VO2 max, Garmin BMR and floors descended are preserved instead of discarded.
-5. DeepSeek becomes an interactive Coach with chat, normalized health context and controlled tool access that can perform explicit user-requested changes.
+2. Activity gains fast-add presets for push-ups, pull-up-bar hangs and stationary bike work.
+3. Nutrition becomes editable from both the UI and API, while the Today presentation is simplified and numeric output is human-readable.
+4. Body Battery is removed from the primary health strip and replaced with energy-expenditure information based on BMR/TDEE.
+5. Additional Garmin metrics such as VO2 max, Garmin BMR and floors descended are preserved instead of discarded.
+6. DeepSeek becomes an interactive Coach with chat, normalized health context and controlled tool access that can perform explicit user-requested changes.
 
 The user-facing UI remains Polish.
 
@@ -60,7 +61,7 @@ Values imported from Garmin through Home Assistant remain Garmin data with `tran
 
 DeepSeek must never mutate SQLite directly. All changes go through the same domain/service layer as authenticated UI/Hermes operations, including validation, audit and idempotency behavior.
 
-## 4. Steps in Activity
+## 4. Steps and fast activities in Activity
 
 ### 4.1 Permanent steps row
 
@@ -96,6 +97,22 @@ The single-user Health Profile described below owns `defaultStepsGoal`, initiali
 
 Garmin/HA ingestion may update `stepsGoal` when Home Assistant exposes it.
 
+### 4.4 Fast-add activity presets
+
+The Today Activity panel exposes compact quick-add entries for common activities so they do not require opening the generic custom-activity form every time.
+
+Initial presets:
+
+- `Pompki` — count-based manual activity measured in repetitions,
+- `Wiszenie na drążku` — duration-based manual activity measured in seconds,
+- `Rower stacjonarny` — duration-based workout measured in minutes, with optional later attachment to a matching Garmin activity from that day.
+
+These are convenience templates, not separate data models. They create normal plan/activity records through the same service/API paths as generic activities.
+
+The UI must allow entering the value directly from the Activity panel and must not create a record until the user submits a non-empty valid value.
+
+The presets should be easy to extend later without hard-coding business logic into the React component; define them as a small configuration list with title, tracking mode, unit and optional activity type.
+
 ## 5. Nutrition redesign
 
 ### 5.1 Today presentation
@@ -116,6 +133,8 @@ Example:
 `B 5,6 · W 53 · T 1,6`
 
 Time and `mealType` remain stored for API/backward compatibility but are treated as optional metadata, not core visual information.
+
+Do not display completeness labels such as `Dane kompletne` or `Brak części danych` in the normal Today nutrition UI. Missing individual macro values are already communicated by `—`; completeness metadata may remain internal/API data if useful.
 
 ### 5.2 Create semantics
 
@@ -448,13 +467,21 @@ Streaming responses are optional for the first implementation. Correct tool exec
 
 Steps row is visually permanent and not dependent on Planner content.
 
-Planned/custom activities continue below it.
+Directly below or adjacent to the steps row, expose compact quick-add controls for:
+
+- `Pompki` — repetitions,
+- `Wiszenie na drążku` — seconds,
+- `Rower stacjonarny` — minutes.
+
+Planned/custom activities continue below these controls.
 
 ### Today Nutrition
 
 Remove the visible time/type columns/labels.
 
 Use compact rounded numeric formatting.
+
+Do not render `Dane kompletne`, `Brak części danych` or equivalent completeness captions under macro totals.
 
 Add edit/delete affordances that do not dominate the panel.
 
@@ -493,6 +520,7 @@ Backend tests:
 
 - step-goal precedence and 7,500 fallback,
 - Garmin ingestion of new metrics,
+- quick-add preset configuration maps to normal plan/activity writes,
 - nutrition PATCH/DELETE + validation + audit/idempotency,
 - optional consumedAt/mealType defaults,
 - Mifflin-St Jeor BMR calculations,
@@ -508,7 +536,9 @@ Backend tests:
 Frontend tests:
 
 - permanent steps row even when no plans exist,
+- Pompki/Wiszenie/Rower quick-add controls render and validate their native units,
 - macro formatting removes floating artifacts,
+- nutrition UI does not render completeness captions,
 - nutrition edit/delete flows,
 - TDEE replaces Body Battery in the default strip,
 - chat displays tool actions/results clearly.
@@ -526,8 +556,8 @@ Existing full CI gates remain required:
 
 Implementation plan should preserve this order to reduce risk:
 
-1. Nutrition CRUD and number formatting.
-2. Permanent steps row + step-goal persistence/fallback.
+1. Nutrition CRUD, removal of completeness captions and number formatting.
+2. Permanent steps row + step-goal persistence/fallback + quick-add activity presets.
 3. Health Profile + BMR/TDEE.
 4. Additional Garmin metrics ingestion.
 5. Coach data models/context builder/system prompt.
