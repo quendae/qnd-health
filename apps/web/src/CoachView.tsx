@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Bot, CheckCircle2, Loader2, MessageCircle, Plus, Send, Sparkles, UserRound } from 'lucide-react';
 import { ApiError, type QndHealthApi } from './api';
-import { coachActionLabel, conversationTitle, visibleCoachMessages } from './coach-view-model';
+import { coachActionLabel, conversationTitle, transientCoachActions, visibleCoachMessages } from './coach-view-model';
 import type { CoachAction, CoachConversation, CoachMessage, CoachProviderErrorPayload } from './types';
 
 interface CoachViewProps {
@@ -160,14 +160,14 @@ export function CoachView({ api, onError }: CoachViewProps) {
 
     try {
       const response = await api.sendCoachMessage(conversationId, content);
-      setLocalActions(response.actions);
+      setLocalActions(transientCoachActions('success', response.actions));
       await Promise.all([loadMessages(conversationId), loadConversations()]);
     } catch (error) {
       if (error instanceof ApiError) {
         const payload = (error.data ?? {}) as CoachProviderErrorPayload;
         const actions = payload.completedActions ?? [];
         if (actions.length > 0) {
-          setLocalActions(actions);
+          setLocalActions(transientCoachActions('partial_error', actions));
           setChatNotice('Coach wykonał poniższe zmiany, ale nie zdążył wygenerować końcowej odpowiedzi.');
           await loadMessages(conversationId);
         } else if (error.status === 503) {
