@@ -5,6 +5,9 @@ export interface DailyHealthRecord {
   steps?: number | null;
   stepsGoal?: number | null;
   floorsAscended?: number | null;
+  floorsDescended?: number | null;
+  vo2Max?: number | null;
+  providerBmrKcal?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
   hrv?: number | null;
@@ -28,6 +31,9 @@ export interface DailyHealthUpsert {
   steps?: number | null;
   stepsGoal?: number | null;
   floorsAscended?: number | null;
+  floorsDescended?: number | null;
+  vo2Max?: number | null;
+  providerBmrKcal?: number | null;
   intensityMinutes?: number | null;
   restingHr?: number | null;
   hrv?: number | null;
