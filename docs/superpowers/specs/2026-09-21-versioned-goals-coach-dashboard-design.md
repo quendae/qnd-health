@@ -88,7 +88,7 @@ model ProfileGoalRevision {
 }
 ```
 
-`effectiveFrom` is stored as the canonical midnight representation of the local effective date, using the same date normalization conventions as existing day-based records.
+`effectiveFrom` is stored as `YYYY-MM-DDT00:00:00.000Z` as a canonical date key for the intended `Europe/Warsaw` calendar day. It is not interpreted as an instant at which an intra-day target changes.
 
 ### 3.1 Snapshot revisions, not per-field events
 
@@ -103,7 +103,13 @@ When one field changes, the service:
 
 This avoids reconstructing state from multiple independent event streams and makes date resolution deterministic.
 
-Multiple revisions may have the same `effectiveFrom`. When that happens, the latest `createdAt` wins. This allows a user or Coach to correct today's targets more than once without destructive updates.
+Multiple revisions may have the same `effectiveFrom`. Resolution order is always:
+
+1. `effectiveFrom DESC`,
+2. `createdAt DESC`,
+3. `id DESC`.
+
+The first matching revision wins. This allows a user or Coach to correct today's targets more than once without destructive updates and gives a deterministic tie-break even if two rows receive the same timestamp.
 
 ### 3.2 Sources
 
@@ -123,9 +129,10 @@ The update process adds an idempotent backfill step after `prisma:push`:
 
 - if at least one `ProfileGoalRevision` exists, do nothing;
 - otherwise, read the existing `HealthProfile` values;
-- create one `migration` revision carrying the current values.
+- if no `HealthProfile` exists, use defaults (`activityFactor = 1.2`, `defaultStepsGoal = 7500`, nutrition goals `null`);
+- create one `migration` revision effective from `1970-01-01` carrying those values.
 
-The initial revision may use a baseline effective date early enough to preserve the current historical appearance of existing data. Because QND Health cannot reconstruct previous target changes that were never stored, the current values become the baseline for all pre-versioning dates. All changes after this migration are historically exact.
+The fixed `1970-01-01` baseline preserves the current pre-versioning behavior for every historical day already stored in QND Health. QND Health cannot reconstruct target changes that happened before versioning because they were never persisted; therefore the values present at migration time become the baseline for all pre-versioning dates. All changes after migration are historically exact.
 
 `update.sh` remains the single deployment command and runs the backfill automatically.
 
@@ -145,6 +152,8 @@ No Today, Progress, Coach or Profile route should implement its own revision-sel
 
 `ResolvedGoals` contains the seven versioned values plus revision metadata (`revisionId`, `effectiveFrom`, `source`).
 
+If no persisted revision exists, `resolveGoals()` returns the same safe defaults used by migration rather than failing a request.
+
 ## 6. API contract
 
 ### 6.1 Existing profile endpoint
@@ -161,7 +170,7 @@ It returns demographic profile fields plus the goals active today as flat compat
 - `dailyFatGoalGrams`
 - `dailyFiberGoalGrams`
 
-It should also return current revision metadata so the UI can state when targets became active.
+It also returns current revision metadata so the UI can state when targets became active.
 
 ### 6.2 Profile mutation
 
@@ -268,7 +277,7 @@ Coach context includes all resolved goals for the context date:
 - activity factor
 - revision effective date
 
-The system prompt should state that these are authoritative QND Health profile values and must be used instead of guesses.
+The system prompt states that these are authoritative QND Health profile values and must be used instead of guesses.
 
 Body Battery must not be used as a primary coaching metric. The daily homepage review must not use it at all. In chat it should only be mentioned if the user explicitly asks about it.
 
@@ -371,7 +380,7 @@ The daily review input and rendered stats do not contain Body Battery.
 
 ### 12.2 Read-only summary path
 
-Add a read-only endpoint such as:
+Add a read-only endpoint:
 
 ```http
 GET /api/v1/coach/daily-summary?date=YYYY-MM-DD
@@ -407,7 +416,7 @@ The favicon is an application asset, not a new branding system.
 
 - Goal revision creation validates all supplied numeric values using the same limits as current profile validation.
 - `effectiveFrom` must be a valid local ISO date.
-- If no revision exists after migration, resolver still falls back safely to current profile/default values rather than failing Today.
+- If no revision exists after migration, resolver still falls back safely to defaults rather than failing Today.
 - If DeepSeek daily summary fails, Today remains usable with deterministic stats and a fallback message.
 - Coach tool actions only trigger client refresh after the mutation actually succeeds.
 - Missing macro goals remain `null`; QND never invents them.
@@ -432,7 +441,7 @@ Required automated coverage:
 
 1. goal resolver selects the newest revision active on a given date;
 2. later goal changes do not alter earlier dates;
-3. same-day correction chooses latest `createdAt`;
+3. same-day correction follows `effectiveFrom DESC, createdAt DESC, id DESC`;
 4. Garmin step goal overrides profile revision for that day only;
 5. profile compatibility endpoint returns today's resolved values;
 6. new carbs/fat/fiber goals validate, persist and round-trip;
@@ -448,7 +457,7 @@ Required automated coverage:
 16. daily Coach summary returns deterministic fallback when DeepSeek fails;
 17. summary cache is reused when input hash is unchanged;
 18. favicon is linked from `index.html`;
-19. backfill is idempotent and preserves current pre-versioning goals.
+19. backfill is idempotent, uses `1970-01-01`, and preserves current pre-versioning goals.
 
 Full verification remains:
 
