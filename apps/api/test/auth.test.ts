@@ -8,6 +8,15 @@ import {
 import { authorizeTokenRecord } from '../src/auth/authorize.js';
 import { apiScopes, hasRequiredScopes } from '../src/auth/scopes.js';
 
+function captureAuthError(action: () => unknown) {
+  try {
+    action();
+    throw new Error('expected authorization to fail');
+  } catch (error) {
+    return error;
+  }
+}
+
 describe('Hermes API token primitives', () => {
   it('generates a prefixed opaque token', () => {
     const token = generateApiToken();
@@ -75,7 +84,7 @@ describe('Hermes token authorization', () => {
   });
 
   it('returns unauthorized for a revoked token', () => {
-    expect(() => authorizeTokenRecord({
+    const error = captureAuthError(() => authorizeTokenRecord({
       rawToken,
       pepper,
       requiredScopes: ['nutrition:read'],
@@ -85,11 +94,13 @@ describe('Hermes token authorization', () => {
         scopes: ['nutrition:read'],
         revokedAt: new Date('2026-09-21T07:00:00Z'),
       },
-    })).toThrowErrorMatchingObject({ statusCode: 401, code: 'unauthorized' });
+    }));
+
+    expect(error).toMatchObject({ statusCode: 401, code: 'unauthorized' });
   });
 
   it('returns forbidden when a valid token lacks a required scope', () => {
-    expect(() => authorizeTokenRecord({
+    const error = captureAuthError(() => authorizeTokenRecord({
       rawToken,
       pepper,
       requiredScopes: ['nutrition:write'],
@@ -99,26 +110,25 @@ describe('Hermes token authorization', () => {
         scopes: ['nutrition:read'],
         revokedAt: null,
       },
-    })).toThrowErrorMatchingObject({ statusCode: 403, code: 'forbidden' });
+    }));
+
+    expect(error).toMatchObject({ statusCode: 403, code: 'forbidden' });
   });
 
   it('returns unauthorized for an invalid token without exposing it in the error', () => {
-    try {
-      authorizeTokenRecord({
-        rawToken: 'qndh_DO_NOT_LEAK_ME',
-        pepper,
-        requiredScopes: [],
-        record: {
-          id: 'token-1',
-          tokenHash,
-          scopes: ['today:read'],
-          revokedAt: null,
-        },
-      });
-      throw new Error('expected authorizeTokenRecord to throw');
-    } catch (error) {
-      expect(error).toMatchObject({ statusCode: 401, code: 'unauthorized' });
-      expect(String(error)).not.toContain('qndh_DO_NOT_LEAK_ME');
-    }
+    const error = captureAuthError(() => authorizeTokenRecord({
+      rawToken: 'qndh_DO_NOT_LEAK_ME',
+      pepper,
+      requiredScopes: [],
+      record: {
+        id: 'token-1',
+        tokenHash,
+        scopes: ['today:read'],
+        revokedAt: null,
+      },
+    }));
+
+    expect(error).toMatchObject({ statusCode: 401, code: 'unauthorized' });
+    expect(String(error)).not.toContain('qndh_DO_NOT_LEAK_ME');
   });
 });
