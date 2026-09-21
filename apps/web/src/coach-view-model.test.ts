@@ -14,10 +14,12 @@ describe('Coach chat view model', () => {
     expect(visibleCoachMessages(messages).map(message => message.role)).toEqual(['user', 'assistant']);
   });
 
-  it('renders human-readable summaries for common Coach actions', () => {
+  it('renders human-readable summaries for real Coach mutation tools', () => {
     expect(coachActionLabel({ toolCallId: 'a', name: 'set_default_step_goal', status: 'completed', result: { defaultStepsGoal: 8000 } })).toBe('Cel kroków zmieniony na 8000');
-    expect(coachActionLabel({ toolCallId: 'b', name: 'set_calorie_goal', status: 'completed', result: { dailyCaloriesGoalKcal: 2200 } })).toBe('Cel kalorii zmieniony na 2200 kcal');
-    expect(coachActionLabel({ toolCallId: 'c', name: 'set_protein_goal', status: 'completed', result: { dailyProteinGoalGrams: 160 } })).toBe('Cel białka zmieniony na 160 g');
+    expect(coachActionLabel({ toolCallId: 'b', name: 'update_profile', status: 'completed', result: { dailyCaloriesGoalKcal: 2200, dailyProteinGoalGrams: 160 } })).toBe('Profil i cele zostały zaktualizowane');
+    expect(coachActionLabel({ toolCallId: 'c', name: 'create_nutrition', status: 'completed', result: { id: 'n1' } })).toBe('Dodano wpis żywieniowy');
+    expect(coachActionLabel({ toolCallId: 'd', name: 'create_measurement', status: 'completed', result: { id: 'm1' } })).toBe('Dodano pomiar');
+    expect(coachActionLabel({ toolCallId: 'e', name: 'create_custom_activity', status: 'completed', result: { id: 'a1' } })).toBe('Dodano wykonaną aktywność');
   });
 
   it('falls back to a safe generic label for unknown actions', () => {
