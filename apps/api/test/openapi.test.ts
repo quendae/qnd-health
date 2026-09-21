@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 
 describe('GET /api/openapi.json', () => {
-  it('documents bearer auth, Today, profile and mutable nutrition endpoints', async () => {
+  it('documents bearer auth, Today, profile, mutable nutrition and Coach endpoints', async () => {
     const app = buildApp();
     const response = await app.inject({ method: 'GET', url: '/api/openapi.json' });
 
@@ -23,6 +23,10 @@ describe('GET /api/openapi.json', () => {
     expect(document.paths['/api/v1/nutrition/{id}'].patch).toBeDefined();
     expect(document.paths['/api/v1/nutrition/{id}'].delete).toBeDefined();
     expect(document.paths['/api/v1/measurements'].post).toBeDefined();
+    expect(document.paths['/api/v1/coach/conversations'].get).toBeDefined();
+    expect(document.paths['/api/v1/coach/conversations'].post).toBeDefined();
+    expect(document.paths['/api/v1/coach/conversations/{id}/messages'].get).toBeDefined();
+    expect(document.paths['/api/v1/coach/conversations/{id}/messages'].post).toBeDefined();
 
     const nutritionHeaders = document.paths['/api/v1/nutrition'].post.parameters;
     expect(nutritionHeaders).toContainEqual(expect.objectContaining({
@@ -42,6 +46,9 @@ describe('GET /api/openapi.json', () => {
     expect(document.components.schemas.HealthProfile).toBeDefined();
     expect(document.components.schemas.EnergyEstimate).toBeDefined();
     expect(document.components.schemas.NutritionEntry).toBeDefined();
+    expect(document.components.schemas.CoachConversation).toBeDefined();
+    expect(document.components.schemas.CoachMessage).toBeDefined();
+    expect(document.components.schemas.CoachAction).toBeDefined();
 
     await app.close();
   });
