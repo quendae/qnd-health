@@ -13,6 +13,7 @@ const payloadSchema = z.object({
   source: z.literal('garmin').default('garmin'),
   transport: z.enum(['home_assistant', 'garmin_api']).optional(),
   steps: z.number().int().nonnegative().nullable().optional(),
+  stepsGoal: z.number().nonnegative().nullable().optional(),
   floorsAscended: nullableNonnegative,
   intensityMinutes: z.number().int().nonnegative().nullable().optional(),
   restingHr: z.number().int().nonnegative().nullable().optional(),
