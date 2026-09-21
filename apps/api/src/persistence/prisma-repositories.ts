@@ -307,6 +307,7 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
           toolMetadata: input.toolMetadata ?? null,
         },
       });
+      await prisma.coachConversation.update({ where: { id: input.conversationId }, data: { updatedAt: new Date() } });
       return mapCoachMessage(row);
     },
   };
