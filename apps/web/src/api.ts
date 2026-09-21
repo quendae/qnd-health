@@ -1,4 +1,4 @@
-import type { CompletedActivity, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse } from './types';
+import type { CompletedActivity, HealthProfile, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -37,6 +37,8 @@ export type NutritionPatchInput = Partial<Pick<NutritionEntry,
   'consumedAt' | 'mealType' | 'title' | 'caloriesKcal' | 'proteinGrams' | 'carbsGrams' | 'fatGrams' | 'fiberGrams' | 'quantityText' | 'notes'
 >>;
 
+export type HealthProfilePatch = Partial<Omit<HealthProfile, 'id'>>;
+
 export class QndHealthApi {
   constructor(private readonly token: string) {}
 
@@ -63,6 +65,14 @@ export class QndHealthApi {
 
   getProgress(from: string, to: string) {
     return this.request<ProgressResponse>(`/api/v1/progress?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  }
+
+  getProfile() {
+    return this.request<HealthProfile | null>('/api/v1/profile');
+  }
+
+  updateProfile(patch: HealthProfilePatch) {
+    return this.request<HealthProfile>('/api/v1/profile', { method: 'PATCH', body: JSON.stringify(patch) });
   }
 
   listPlans(from: string, to: string) {
