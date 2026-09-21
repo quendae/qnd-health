@@ -101,3 +101,46 @@ export interface TodayResponse {
   weekToDate: { totalPlanItems: number; completed: number; partial: number; planned: number };
   remainingWeek: Omit<PlanItem, 'progress' | 'candidates'>[];
 }
+
+export interface HistoryDay {
+  date: string;
+  health: DailyHealth | null;
+  weightKg: number | null;
+  plans: Array<Omit<PlanItem, 'progress' | 'candidates'>>;
+  activities: CompletedActivity[];
+}
+
+export interface HistoryResponse {
+  from: string;
+  to: string;
+  days: HistoryDay[];
+}
+
+export interface ProgressSeriesPoint {
+  date: string;
+  steps: number | null;
+  restingHr: number | null;
+  hrv: number | null;
+  bodyBattery: number | null;
+  sleepDurationSeconds: number | null;
+  weightKg: number | null;
+  activitiesCount: number;
+  activityDurationSeconds: number;
+  activityDistanceMeters: number;
+  planCompletionPercent: number | null;
+}
+
+export interface ProgressResponse {
+  period: { from: string; to: string; days: number };
+  plan: { total: number; completed: number; partial: number; planned: number; other: number; completionPercent: number | null };
+  activity: { count: number; durationSeconds: number; distanceMeters: number };
+  averages: {
+    steps: number | null;
+    restingHr: number | null;
+    hrv: number | null;
+    bodyBattery: number | null;
+    sleepDurationSeconds: number | null;
+  };
+  weight: { firstKg: number | null; latestKg: number | null; deltaKg: number | null };
+  series: ProgressSeriesPoint[];
+}
