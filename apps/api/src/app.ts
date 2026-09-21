@@ -15,6 +15,7 @@ import type { AuditRepository } from './audit/repository.js';
 import { noopAuditRepository } from './audit/repository.js';
 import type { IdempotencyRepository } from './idempotency/repository.js';
 import { noopIdempotencyRepository } from './idempotency/repository.js';
+import { openApiDocument } from './openapi.js';
 
 export interface BuildAppOptions {
   tokenPepper?: string;
@@ -33,6 +34,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
   installErrorHandler(app);
   app.get('/api/v1/health', async () => ({ status: 'ok' as const }));
+  app.get('/api/openapi.json', async () => openApiDocument);
 
   const authorizer = options.tokenPepper && options.tokenRepository
     ? createRequestAuthorizer(options.tokenRepository, options.tokenPepper)
