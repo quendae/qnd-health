@@ -27,18 +27,26 @@ describe('Today view model', () => {
     expect(weekCompletion(today)).toBe(63);
   });
 
-  it('keeps protein progress in the macro card and only enables meal scrolling after seven rows', () => {
-    const nutritionMacroCards = (viewModel as Record<string, unknown>).nutritionMacroCards as undefined | ((totals: Record<string, number | null>, proteinGoal: number | null) => unknown[]);
+  it('keeps all nutrition targets in macro cards and only enables meal scrolling after seven rows', () => {
+    const nutritionMacroCards = (viewModel as Record<string, unknown>).nutritionMacroCards as undefined | ((
+      totals: Record<string, number | null>,
+      goals: { proteinGrams: number | null; carbsGrams: number | null; fatGrams: number | null; fiberGrams: number | null },
+    ) => unknown[]);
     const nutritionMealListClass = (viewModel as Record<string, unknown>).nutritionMealListClass as undefined | ((count: number) => string);
 
     expect(typeof nutritionMacroCards).toBe('function');
     expect(typeof nutritionMealListClass).toBe('function');
-    expect(nutritionMacroCards!({ proteinGrams: 100, carbsGrams: 210, fatGrams: 65, fiberGrams: 24 }, 160)[0]).toEqual({
-      label: 'Białko',
-      value: 100,
-      goal: 160,
-      percent: 63,
-    });
+    expect(nutritionMacroCards!({ proteinGrams: 90, carbsGrams: 120, fatGrams: 45, fiberGrams: 20 }, {
+      proteinGrams: 150,
+      carbsGrams: 180,
+      fatGrams: 60,
+      fiberGrams: 30,
+    })).toEqual([
+      { label: 'Białko', value: 90, goal: 150, percent: 60 },
+      { label: 'Węglowodany', value: 120, goal: 180, percent: 67 },
+      { label: 'Tłuszcz', value: 45, goal: 60, percent: 75 },
+      { label: 'Błonnik', value: 20, goal: 30, percent: 67 },
+    ]);
     expect(nutritionMealListClass!(7)).toBe('meal-list');
     expect(nutritionMealListClass!(8)).toBe('meal-list scrollable');
   });
