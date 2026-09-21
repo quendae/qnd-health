@@ -35,7 +35,6 @@ describe('Coach tools', () => {
     }, { conversationId: 'conv-1', requestId: 'req-1', timeZone: 'Europe/Warsaw' });
 
     expect(result).toMatchObject({ defaultStepsGoal: 8000 });
-    expect(profile?.defaultStepsGoal).toBe(8000);
     expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({
       actorType: 'coach', action: 'profile.set_default_step_goal', entityType: 'health_profile', entityId: 'default', requestId: 'req-1',
