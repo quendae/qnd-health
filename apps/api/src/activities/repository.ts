@@ -16,7 +16,21 @@ export interface CompletedActivityRecord {
   [key: string]: unknown;
 }
 
-export type ProviderActivityUpsert = Omit<CompletedActivityRecord, 'id'> & { providerActivityId: string };
+export interface ProviderActivityUpsert {
+  provider: string;
+  providerActivityId: string;
+  transport?: string | null;
+  activityType: string;
+  startedAt: string;
+  durationSeconds?: number | null;
+  distanceMeters?: number | null;
+  avgHr?: number | null;
+  maxHr?: number | null;
+  avgPaceSecondsPerKm?: number | null;
+  cadence?: number | null;
+  elevationGainMeters?: number | null;
+  calories?: number | null;
+}
 
 export interface CompletedActivityRepository {
   list(from?: string, to?: string): Promise<CompletedActivityRecord[]>;
