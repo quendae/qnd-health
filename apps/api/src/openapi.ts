@@ -28,7 +28,7 @@ export const openApiDocument = {
         },
       },
       HealthProfile: {
-        type: 'object', required: ['id', 'dateOfBirth', 'sexForBmr', 'heightCm', 'activityFactor', 'defaultStepsGoal'],
+        type: 'object', required: ['id', 'dateOfBirth', 'sexForBmr', 'heightCm', 'activityFactor', 'defaultStepsGoal', 'dailyCaloriesGoalKcal'],
         properties: {
           id: { type: 'string', enum: ['default'] },
           dateOfBirth: { type: ['string', 'null'], format: 'date' },
@@ -36,6 +36,7 @@ export const openApiDocument = {
           heightCm: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 260 },
           activityFactor: { type: 'number', minimum: 1, maximum: 3 },
           defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
+          dailyCaloriesGoalKcal: { type: ['integer', 'null'], minimum: 1, maximum: 20000, description: 'Optional manually configured daily calorie target. It is distinct from estimated TDEE.' },
         },
       },
       HealthProfilePatch: {
@@ -46,6 +47,7 @@ export const openApiDocument = {
           heightCm: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 260 },
           activityFactor: { type: 'number', minimum: 1, maximum: 3 },
           defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
+          dailyCaloriesGoalKcal: { type: ['integer', 'null'], minimum: 1, maximum: 20000, description: 'Set null to disable calorie-goal tracking.' },
         },
       },
       EnergyEstimate: {
@@ -170,7 +172,7 @@ export const openApiDocument = {
           { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
           { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
         ],
-        responses: { '200': { description: 'Progress aggregate and time series; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
+        responses: { '200': { description: 'Progress aggregate and time series; series includes step goals, nutrition calories/goal and VO2 max when available; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
       },
     },
     '/api/v1/health/daily/{date}': {
