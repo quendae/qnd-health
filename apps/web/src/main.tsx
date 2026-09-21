@@ -5,6 +5,7 @@ import './styles.css';
 import './features.css';
 import './insights.css';
 import './refinements.css';
+import './coach.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
