@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, Link2, X } from 'lucide-react';
 import type { QndHealthApi } from './api';
-import type { CompletedActivity } from './types';
+import type { CompletedActivity, WorkoutStructure } from './types';
 import { buildCustomActivityPlan } from './custom-activity';
+import { activityCatalog, activityCatalogItem, activityLabel } from './activity-catalog';
 import { formatDistance, formatDuration } from './view-model';
 
-const activityTypes = [
-  ['walking', 'Spacer'],
-  ['running', 'Bieganie'],
-  ['cycling', 'Rower'],
-  ['strength_training', 'Trening siłowy'],
-  ['swimming', 'Pływanie'],
-  ['yoga', 'Joga'],
-  ['other', 'Inna'],
-] as const;
+function optionalPositive(value: string): number | null {
+  if (!value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
 
-function activityTypeLabel(value: string) {
-  return activityTypes.find(([id]) => id === value)?.[1] ?? value;
+function optionalNonNegative(value: string): number | null {
+  if (!value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
 export function CustomActivityDialog({
@@ -34,6 +33,10 @@ export function CustomActivityDialog({
   const [activityType, setActivityType] = useState('walking');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [distanceKm, setDistanceKm] = useState('');
+  const [sets, setSets] = useState('');
+  const [repsPerSet, setRepsPerSet] = useState('');
+  const [secondsPerSet, setSecondsPerSet] = useState('');
+  const [restSeconds, setRestSeconds] = useState('');
   const [activities, setActivities] = useState<CompletedActivity[]>([]);
   const [selectedGarminId, setSelectedGarminId] = useState('');
   const [loadingGarmin, setLoadingGarmin] = useState(true);
@@ -60,12 +63,30 @@ export function CustomActivityDialog({
     () => activities.find(item => item.id === selectedGarminId) ?? null,
     [activities, selectedGarminId],
   );
+  const selectedType = activityCatalogItem(activityType);
 
   useEffect(() => {
     if (!selectedGarmin) return;
     setActivityType(selectedGarmin.activityType);
-    if (!title.trim()) setTitle(activityTypeLabel(selectedGarmin.activityType));
+    if (!title.trim()) setTitle(activityLabel(selectedGarmin.activityType));
   }, [selectedGarmin]);
+
+  function changeActivityType(value: string) {
+    setActivityType(value);
+    if (!title.trim()) setTitle(activityCatalogItem(value).defaultTitle);
+  }
+
+  function structure(): WorkoutStructure | null {
+    if (selectedGarmin) return null;
+    const mode = selectedType.structure;
+    if (mode !== 'reps' && mode !== 'seconds') return null;
+    const value: WorkoutStructure = {
+      sets: optionalPositive(sets),
+      restSeconds: optionalNonNegative(restSeconds),
+      ...(mode === 'reps' ? { repsPerSet: optionalPositive(repsPerSet) } : { secondsPerSet: optionalPositive(secondsPerSet) }),
+    };
+    return Object.values(value).some(item => item != null) ? value : null;
+  }
 
   async function submit() {
     if (!title.trim() || saving) return;
@@ -78,6 +99,7 @@ export function CustomActivityDialog({
         activityType,
         durationMinutes: durationMinutes ? Number(durationMinutes) : null,
         distanceKm: distanceKm ? Number(distanceKm) : null,
+        workoutStructure: structure(),
         garminActivity: selectedGarmin,
       });
       const created = await api.createPlan(prepared.plan);
@@ -95,6 +117,9 @@ export function CustomActivityDialog({
     }
   }
 
+  const structured = !selectedGarmin && (selectedType.structure === 'reps' || selectedType.structure === 'seconds');
+  const timed = !selectedGarmin && !structured;
+
   return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onClose(); }}>
     <section className="modal-card activity-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-activity-title">
       <header className="modal-head">
@@ -109,19 +134,34 @@ export function CustomActivityDialog({
           <input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="np. Spacer z psem" />
         </label>
         <label>Typ aktywności
-          <select value={activityType} onChange={event => setActivityType(event.target.value)} disabled={Boolean(selectedGarmin)}>
-            {activityTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          <select value={activityType} onChange={event => changeActivityType(event.target.value)} disabled={Boolean(selectedGarmin)}>
+            {activityCatalog.map(item => <option value={item.value} key={item.value}>{item.label}</option>)}
           </select>
         </label>
         <label>Data
           <input value={date} disabled />
         </label>
-        <label>Czas (min)
-          <input type="number" min="1" step="1" value={durationMinutes} onChange={event => setDurationMinutes(event.target.value)} disabled={Boolean(selectedGarmin)} placeholder="45" />
-        </label>
-        <label>Dystans (km)
-          <input type="number" min="0" step="0.1" value={distanceKm} onChange={event => setDistanceKm(event.target.value)} disabled={Boolean(selectedGarmin)} placeholder="3.8" />
-        </label>
+        {timed && <>
+          <label>Czas (min)
+            <input type="number" min="1" step="1" value={durationMinutes} onChange={event => setDurationMinutes(event.target.value)} placeholder="45" />
+          </label>
+          <label>Dystans (km)
+            <input type="number" min="0" step="0.1" value={distanceKm} onChange={event => setDistanceKm(event.target.value)} placeholder="3.8" />
+          </label>
+        </>}
+        {structured && <>
+          <label>Liczba serii
+            <input type="number" min="1" step="1" value={sets} onChange={event => setSets(event.target.value)} placeholder="4" />
+          </label>
+          {selectedType.structure === 'reps' ? <label>Powtórzeń w serii
+            <input type="number" min="1" step="1" value={repsPerSet} onChange={event => setRepsPerSet(event.target.value)} placeholder="12" />
+          </label> : <label>Czas serii (s)
+            <input type="number" min="1" step="1" value={secondsPerSet} onChange={event => setSecondsPerSet(event.target.value)} placeholder="30" />
+          </label>}
+          <label>Przerwa między seriami (s)
+            <input type="number" min="0" step="5" value={restSeconds} onChange={event => setRestSeconds(event.target.value)} placeholder="60" />
+          </label>
+        </>}
       </div>
 
       <div className="garmin-picker">
@@ -133,7 +173,7 @@ export function CustomActivityDialog({
           </label>
           {activities.map(item => <label className={`garmin-activity-option ${selectedGarminId === item.id ? 'selected' : ''}`} key={item.id}>
             <input type="radio" name="garmin-activity" value={item.id} checked={selectedGarminId === item.id} onChange={() => setSelectedGarminId(item.id)} />
-            <div><strong>{activityTypeLabel(item.activityType)}</strong><span>{new Date(item.startedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · {formatDuration(item.durationSeconds)} · {formatDistance(item.distanceMeters)}</span></div>
+            <div><strong>{activityLabel(item.activityType)}</strong><span>{new Date(item.startedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · {formatDuration(item.durationSeconds)} · {formatDistance(item.distanceMeters)}</span></div>
           </label>)}
         </div>}
       </div>
