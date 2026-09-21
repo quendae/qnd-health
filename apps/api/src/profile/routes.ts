@@ -16,6 +16,7 @@ const profilePatchSchema = z.object({
   activityFactor: z.number().min(1).max(3).optional(),
   defaultStepsGoal: z.number().int().min(1).max(100000).optional(),
   dailyCaloriesGoalKcal: z.number().int().min(1).max(20000).nullable().optional(),
+  dailyProteinGoalGrams: z.number().int().min(1).max(1000).nullable().optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 async function requireRead(request: FastifyRequest, authorizer: RequestAuthorizer) {
@@ -75,6 +76,7 @@ export function registerProfileRoutes(app: FastifyInstance, deps: {
             activityFactor: saved.activityFactor,
             defaultStepsGoal: saved.defaultStepsGoal,
             dailyCaloriesGoalKcal: saved.dailyCaloriesGoalKcal,
+            dailyProteinGoalGrams: saved.dailyProteinGoalGrams,
           },
         };
       },
