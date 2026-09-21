@@ -119,6 +119,9 @@ model DailyHealth {
   steps                Int?
   stepsGoal            Float?
   floorsAscended       Float?
+  floorsDescended      Float?
+  vo2Max               Float?
+  providerBmrKcal      Float?
   intensityMinutes     Int?
   restingHr            Int?
   hrv                  Float?
