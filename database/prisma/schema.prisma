@@ -177,6 +177,24 @@ model HealthProfile {
   updatedAt             DateTime @updatedAt
 }
 
+model ProfileGoalRevision {
+  id                    String   @id @default(uuid())
+  effectiveFrom         DateTime
+  source                String
+  sourceRef             String?
+  reason                String?
+  activityFactor        Float
+  defaultStepsGoal      Int
+  dailyCaloriesGoalKcal Int?
+  dailyProteinGoalGrams Int?
+  dailyCarbsGoalGrams   Int?
+  dailyFatGoalGrams     Int?
+  dailyFiberGoalGrams   Int?
+  createdAt             DateTime @default(now())
+
+  @@index([effectiveFrom, createdAt])
+}
+
 model NutritionEntry {
   id           String     @id @default(uuid())
   consumedAt   DateTime
