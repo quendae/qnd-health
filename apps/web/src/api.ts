@@ -1,4 +1,4 @@
-import type { CompletedActivity, HistoryResponse, PlanItem, ProgressResponse, TodayResponse } from './types';
+import type { CompletedActivity, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -32,6 +32,10 @@ export interface PlanWriteInput {
 }
 
 export type PlanPatchInput = Partial<PlanWriteInput>;
+
+export type NutritionPatchInput = Partial<Pick<NutritionEntry,
+  'consumedAt' | 'mealType' | 'title' | 'caloriesKcal' | 'proteinGrams' | 'carbsGrams' | 'fatGrams' | 'fiberGrams' | 'quantityText' | 'notes'
+>>;
 
 export class QndHealthApi {
   constructor(private readonly token: string) {}
@@ -95,5 +99,15 @@ export class QndHealthApi {
 
   detachActivity(planId: string) {
     return this.request<PlanItem>(`/api/v1/plans/${encodeURIComponent(planId)}/activity`, { method: 'DELETE' });
+  }
+
+  updateNutrition(id: string, patch: NutritionPatchInput) {
+    return this.request<NutritionEntry>(`/api/v1/nutrition/${encodeURIComponent(id)}`, {
+      method: 'PATCH', body: JSON.stringify(patch),
+    });
+  }
+
+  deleteNutrition(id: string) {
+    return this.request<void>(`/api/v1/nutrition/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 }
