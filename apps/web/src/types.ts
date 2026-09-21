@@ -71,6 +71,22 @@ export interface Measurement {
   source: 'garmin' | 'hermes' | 'manual';
 }
 
+export interface HealthProfile {
+  id: 'default';
+  dateOfBirth: string | null;
+  sexForBmr: 'male' | 'female' | null;
+  heightCm: number | null;
+  activityFactor: number;
+  defaultStepsGoal: number;
+}
+
+export interface EnergyEstimate {
+  bmrKcal: number;
+  tdeeKcal: number;
+  source: 'mifflin_st_jeor';
+  activityFactor: number;
+}
+
 export interface NutritionEntry {
   id: string;
   consumedAt: string;
@@ -97,6 +113,7 @@ export interface TodayResponse {
   date: string;
   health: DailyHealth | null;
   latestMeasurement: Measurement | null;
+  energy: EnergyEstimate | null;
   activity: {
     steps: { current: number; target: number; goalSource: 'garmin' | 'profile' | 'fallback' };
     items: PlanItem[];
