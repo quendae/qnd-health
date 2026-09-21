@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Database, HeartPulse, LockKeyhole, Settings, Watch } from 'lucide-react';
 import type { QndHealthApi } from './api';
 import { ProfileSettings } from './ProfileSettings';
@@ -41,7 +41,7 @@ export function SettingsView({
   const [tokenDraft, setTokenDraft] = useState('');
   const tokenStored = hasWebToken ?? browserHasWebToken();
 
-  function submitToken(event: React.FormEvent<HTMLFormElement>) {
+  function submitToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = tokenDraft.trim();
     if (!value) return;
