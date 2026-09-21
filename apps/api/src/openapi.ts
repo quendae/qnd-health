@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'QND Health API',
-    version: '0.3.0',
+    version: '0.4.0',
     description: 'Private health, planning, nutrition, profile and coaching API used by the QND Health web app and Hermes agent.',
   },
   servers: [{ url: 'https://fit.qqnd.fyi', description: 'QND Health production' }],
@@ -133,6 +133,35 @@ export const openApiDocument = {
           period: { type: 'object', additionalProperties: true }, plan: { type: 'object', additionalProperties: true },
           activity: { type: 'object', additionalProperties: true }, averages: { type: 'object', additionalProperties: true },
           weight: { type: 'object', additionalProperties: true }, series: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        },
+      },
+      CoachConversation: {
+        type: 'object', required: ['id', 'title', 'createdAt', 'updatedAt'],
+        properties: {
+          id: { type: 'string' }, title: { type: ['string', 'null'] },
+          createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CoachMessage: {
+        type: 'object', required: ['id', 'conversationId', 'role', 'content', 'model', 'toolMetadata', 'createdAt'],
+        properties: {
+          id: { type: 'string' }, conversationId: { type: 'string' },
+          role: { type: 'string', enum: ['user', 'assistant', 'tool', 'system'] }, content: { type: 'string' },
+          model: { type: ['string', 'null'] }, toolMetadata: { type: ['object', 'null'], additionalProperties: true },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CoachAction: {
+        type: 'object', required: ['toolCallId', 'name', 'status', 'result'],
+        properties: {
+          toolCallId: { type: 'string' }, name: { type: 'string' }, status: { type: 'string', enum: ['completed'] }, result: {},
+        },
+      },
+      CoachTurnResponse: {
+        type: 'object', required: ['message', 'actions'],
+        properties: {
+          message: { $ref: '#/components/schemas/CoachMessage' },
+          actions: { type: 'array', items: { $ref: '#/components/schemas/CoachAction' } },
         },
       },
     },
@@ -271,6 +300,42 @@ export const openApiDocument = {
         parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/BodyMeasurementInput' } } } },
         responses: { '201': { description: 'Created measurement' } },
+      },
+    },
+    '/api/v1/coach/conversations': {
+      get: {
+        summary: 'List persistent Coach conversations', security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Conversation list', content: { 'application/json': { schema: { type: 'object', properties: { conversations: { type: 'array', items: { $ref: '#/components/schemas/CoachConversation' } } } } } } } },
+      },
+      post: {
+        summary: 'Create a persistent Coach conversation', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        requestBody: { required: false, content: { 'application/json': { schema: { type: 'object', properties: { title: { type: ['string', 'null'], maxLength: 120 } } } } } },
+        responses: { '201': { description: 'Created conversation', content: { 'application/json': { schema: { type: 'object', properties: { conversation: { $ref: '#/components/schemas/CoachConversation' } } } } } } },
+      },
+    },
+    '/api/v1/coach/conversations/{id}/messages': {
+      get: {
+        summary: 'Read persistent messages in a Coach conversation', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Conversation and messages', content: { 'application/json': { schema: { type: 'object', properties: { conversation: { $ref: '#/components/schemas/CoachConversation' }, messages: { type: 'array', items: { $ref: '#/components/schemas/CoachMessage' } } } } } } },
+          '404': { description: 'Conversation not found' },
+        },
+      },
+      post: {
+        summary: 'Send a user message to DeepSeek Coach and execute allow-listed QND Health tool calls', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['content'], properties: { content: { type: 'string', minLength: 1, maxLength: 8000 } } } } } },
+        responses: {
+          '200': { description: 'Final assistant response and actions executed during this turn', content: { 'application/json': { schema: { $ref: '#/components/schemas/CoachTurnResponse' } } } },
+          '404': { description: 'Conversation not found' },
+          '503': { description: 'DeepSeek is not configured on this server' },
+          '502': { description: 'Provider failed before a final response. Body may include completedActions from this turn.' },
+        },
       },
     },
   },
