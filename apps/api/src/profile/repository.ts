@@ -8,6 +8,7 @@ export interface HealthProfileRecord {
   activityFactor: number;
   defaultStepsGoal: number;
   dailyCaloriesGoalKcal: number | null;
+  dailyProteinGoalGrams: number | null;
 }
 
 export type HealthProfilePatch = Partial<Omit<HealthProfileRecord, 'id'>>;
