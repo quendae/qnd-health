@@ -8,6 +8,8 @@ import { summarizeNutrition } from '../nutrition/summary.js';
 import type { MeasurementRepository } from '../measurements/repository.js';
 import type { DailyHealthRecord, DailyHealthRepository } from '../health/repository.js';
 import type { CompletedActivityRepository } from '../activities/repository.js';
+import type { HealthProfileRepository } from '../profile/repository.js';
+import { calculateBmr, calculateTdee } from '../profile/energy.js';
 import { localIsoDate, weekBounds } from './date-utils.js';
 import { sendValidationError } from '../http/errors.js';
 import { resolveStepGoal } from './step-goal.js';
@@ -43,6 +45,7 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
   planRepository: PlanRepository;
   nutritionRepository: NutritionRepository;
   measurementRepository: MeasurementRepository;
+  profileRepository?: HealthProfileRepository;
   dailyHealthRepository: DailyHealthRepository;
   completedActivityRepository: CompletedActivityRepository;
   timeZone: string;
@@ -54,12 +57,13 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
 
     const date = parsed.data.date;
     const week = weekBounds(date);
-    const [weekPlans, health, nutritionEntries, measurements, completedActivities] = await Promise.all([
+    const [weekPlans, health, nutritionEntries, measurements, completedActivities, profile] = await Promise.all([
       deps.planRepository.list(week.start, week.end),
       deps.dailyHealthRepository.findByDate(date),
       deps.nutritionRepository.list(),
       deps.measurementRepository.list(),
       deps.completedActivityRepository.list(),
+      deps.profileRepository?.get() ?? Promise.resolve(null),
     ]);
 
     const todaysPlans = weekPlans.filter((plan) => plan.date === date);
@@ -84,7 +88,20 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
       return { ...plan, status: progress.status, progress, candidates };
     });
 
-    const stepGoal = resolveStepGoal(health?.stepsGoal, null);
+    const latestMeasurement = [...measurements].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0] ?? null;
+    const bmrKcal = profile
+      ? calculateBmr(profile, latestMeasurement?.weightKg ?? null, date)
+      : null;
+    const energy = bmrKcal != null && profile
+      ? {
+          bmrKcal,
+          tdeeKcal: calculateTdee(bmrKcal, profile.activityFactor),
+          source: 'mifflin_st_jeor' as const,
+          activityFactor: profile.activityFactor,
+        }
+      : null;
+
+    const stepGoal = resolveStepGoal(health?.stepsGoal, profile?.defaultStepsGoal ?? null);
     const steps = typeof health?.steps === 'number' && Number.isFinite(health.steps) && health.steps >= 0 ? health.steps : 0;
 
     const toDatePlans = weekPlans.filter((plan) => plan.date <= date);
@@ -93,7 +110,8 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
     return {
       date,
       health,
-      latestMeasurement: [...measurements].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0] ?? null,
+      latestMeasurement,
+      energy,
       activity: {
         steps: { current: steps, target: stepGoal.target, goalSource: stepGoal.source },
         items: activityItems,
