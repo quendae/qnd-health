@@ -2,6 +2,9 @@
   "name": "@qnd-health/activity-model",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/plan-item.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
