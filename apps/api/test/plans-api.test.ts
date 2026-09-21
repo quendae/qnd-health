@@ -1,44 +1,32 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { hashApiToken } from '../src/auth/token.js';
+import type { NewStoredPlanItem, PlanRepository, StoredPlanItem } from '../src/plans/repository.js';
 
-interface StoredPlan {
-  id: string;
-  date: string;
-  kind: string;
-  title: string;
-  completionStrategy: string;
-  metricKey: string | null;
-  targetValue: number | null;
-  currentManualValue: number | null;
-  unit: string | null;
-  status: string;
-}
-
-class MemoryPlanRepository {
-  private plans = new Map<string, StoredPlan>();
+class MemoryPlanRepository implements PlanRepository {
+  private plans = new Map<string, StoredPlanItem>();
   private nextId = 1;
 
-  async create(input: Omit<StoredPlan, 'id'>): Promise<StoredPlan> {
-    const plan = { ...input, id: `plan-${this.nextId++}` };
+  async create(input: NewStoredPlanItem): Promise<StoredPlanItem> {
+    const plan: StoredPlanItem = { ...input, id: `plan-${this.nextId++}` };
     this.plans.set(plan.id, plan);
     return plan;
   }
 
-  async list(from?: string, to?: string): Promise<StoredPlan[]> {
+  async list(from?: string, to?: string): Promise<StoredPlanItem[]> {
     return [...this.plans.values()].filter((plan) => (
       (!from || plan.date >= from) && (!to || plan.date <= to)
     ));
   }
 
-  async findById(id: string): Promise<StoredPlan | null> {
+  async findById(id: string): Promise<StoredPlanItem | null> {
     return this.plans.get(id) ?? null;
   }
 
-  async update(id: string, patch: Partial<StoredPlan>): Promise<StoredPlan | null> {
+  async update(id: string, patch: Partial<StoredPlanItem>): Promise<StoredPlanItem | null> {
     const existing = this.plans.get(id);
     if (!existing) return null;
-    const updated = { ...existing, ...patch, id };
+    const updated: StoredPlanItem = { ...existing, ...patch, id };
     this.plans.set(id, updated);
     return updated;
   }

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { hashApiToken } from '../src/auth/token.js';
+import type { NewNutritionRecord, NutritionRecord, NutritionRepository } from '../src/nutrition/repository.js';
+import type { MeasurementRecord, MeasurementRepository, NewMeasurementRecord } from '../src/measurements/repository.js';
 
 const pepper = 'test-pepper';
 const token = 'qndh_health-writer';
@@ -23,69 +25,44 @@ function auth() {
   return { authorization: `Bearer ${token}` };
 }
 
-interface NutritionRecord {
-  id: string;
-  consumedAt: string;
-  mealType: string;
-  title: string;
-  caloriesKcal: number | null;
-  proteinGrams: number | null;
-  carbsGrams: number | null;
-  fatGrams: number | null;
-  fiberGrams: number | null;
-  quantityText: string | null;
-  notes: string | null;
-  source: string;
-}
-
-class MemoryNutritionRepository {
+class MemoryNutritionRepository implements NutritionRepository {
   private items = new Map<string, NutritionRecord>();
   private nextId = 1;
 
-  async create(input: Omit<NutritionRecord, 'id'>) {
-    const item = { ...input, id: `nutrition-${this.nextId++}` };
+  async create(input: NewNutritionRecord): Promise<NutritionRecord> {
+    const item: NutritionRecord = { ...input, id: `nutrition-${this.nextId++}` };
     this.items.set(item.id, item);
     return item;
   }
 
-  async list(from?: string, to?: string) {
+  async list(from?: string, to?: string): Promise<NutritionRecord[]> {
     return [...this.items.values()]
       .filter((item) => (!from || item.consumedAt >= from) && (!to || item.consumedAt <= to))
       .sort((a, b) => a.consumedAt.localeCompare(b.consumedAt));
   }
 
-  async findById(id: string) { return this.items.get(id) ?? null; }
-  async update(id: string, patch: Partial<NutritionRecord>) {
+  async findById(id: string): Promise<NutritionRecord | null> { return this.items.get(id) ?? null; }
+  async update(id: string, patch: Partial<NutritionRecord>): Promise<NutritionRecord | null> {
     const existing = this.items.get(id);
     if (!existing) return null;
-    const updated = { ...existing, ...patch, id };
+    const updated: NutritionRecord = { ...existing, ...patch, id };
     this.items.set(id, updated);
     return updated;
   }
-  async delete(id: string) { return this.items.delete(id); }
+  async delete(id: string): Promise<boolean> { return this.items.delete(id); }
 }
 
-interface MeasurementRecord {
-  id: string;
-  measuredAt: string;
-  weightKg: number;
-  bodyFatPercent: number | null;
-  bmi: number | null;
-  muscleMassKg: number | null;
-  source: string;
-}
-
-class MemoryMeasurementRepository {
+class MemoryMeasurementRepository implements MeasurementRepository {
   private items: MeasurementRecord[] = [];
   private nextId = 1;
 
-  async create(input: Omit<MeasurementRecord, 'id'>) {
-    const item = { ...input, id: `measurement-${this.nextId++}` };
+  async create(input: NewMeasurementRecord): Promise<MeasurementRecord> {
+    const item: MeasurementRecord = { ...input, id: `measurement-${this.nextId++}` };
     this.items.push(item);
     return item;
   }
 
-  async list(from?: string, to?: string) {
+  async list(from?: string, to?: string): Promise<MeasurementRecord[]> {
     return this.items
       .filter((item) => (!from || item.measuredAt >= from) && (!to || item.measuredAt <= to))
       .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
