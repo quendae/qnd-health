@@ -108,6 +108,60 @@ describe('Hermes nutrition and measurement API', () => {
     await server.close();
   });
 
+  it('defaults missing meal metadata and allows correction and deletion', async () => {
+    const server = app();
+    const created = await server.inject({
+      method: 'POST',
+      url: '/api/v1/nutrition',
+      headers: auth(),
+      payload: { title: 'Owsianka', caloriesKcal: 420 },
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json().mealType).toBe('other');
+    expect(Number.isNaN(Date.parse(created.json().consumedAt))).toBe(false);
+
+    const id = created.json().id as string;
+    const edited = await server.inject({
+      method: 'PATCH',
+      url: `/api/v1/nutrition/${id}`,
+      headers: auth(),
+      payload: { caloriesKcal: 390, proteinGrams: 31.2 },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json()).toMatchObject({ caloriesKcal: 390, proteinGrams: 31.2, title: 'Owsianka' });
+
+    const deleted = await server.inject({ method: 'DELETE', url: `/api/v1/nutrition/${id}`, headers: auth() });
+    expect(deleted.statusCode).toBe(204);
+
+    const list = await server.inject({ method: 'GET', url: '/api/v1/nutrition', headers: auth() });
+    expect(list.json().items).toEqual([]);
+    await server.close();
+  });
+
+  it('rejects invalid nutrition corrections and returns 404 for missing entries', async () => {
+    const server = app();
+    const invalid = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/nutrition/missing',
+      headers: auth(),
+      payload: { proteinGrams: -1 },
+    });
+    expect(invalid.statusCode).toBe(422);
+
+    const missingPatch = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/nutrition/missing',
+      headers: auth(),
+      payload: { proteinGrams: 10 },
+    });
+    expect(missingPatch.statusCode).toBe(404);
+
+    const missingDelete = await server.inject({ method: 'DELETE', url: '/api/v1/nutrition/missing', headers: auth() });
+    expect(missingDelete.statusCode).toBe(404);
+    await server.close();
+  });
+
   it('sums known nutrition values but reports incomplete macros instead of treating missing data as known zero', async () => {
     const server = app();
     await server.inject({
