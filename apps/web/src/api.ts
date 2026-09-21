@@ -1,4 +1,4 @@
-import type { PlanItem, TodayResponse } from './types';
+import type { CompletedActivity, PlanItem, TodayResponse } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -67,6 +67,10 @@ export class QndHealthApi {
 
   deletePlan(id: string) {
     return this.request<void>(`/api/v1/plans/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  listActivities(date: string) {
+    return this.request<{ items: CompletedActivity[] }>(`/api/v1/activities?date=${encodeURIComponent(date)}`);
   }
 
   updateProgress(id: string, value: number) {
