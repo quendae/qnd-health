@@ -56,10 +56,10 @@ export function ProfileSettings({
   return <article className="panel settings-card profile-settings">
     <header>
       <div className="settings-icon"><UserRound /></div>
-      <div><h2>Profil zdrowotny</h2><p>Dane do celu kroków oraz szacowania BMR/TDEE</p></div>
+      <div><h2>Profil zdrowotny</h2><p>Dane do celów oraz szacowania BMR/TDEE</p></div>
     </header>
 
-    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to BMR pomnożone przez jawny współczynnik aktywności — wynik jest szacunkiem, nie pomiarem z Garmina.</p>
+    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to osobny szacunek wydatku energii. Dzienny cel kcal ustawiasz ręcznie — aplikacja nie zakłada automatycznie deficytu.</p>
 
     {loading ? <div className="empty">Wczytywanie profilu…</div> : <>
       <div className="profile-form">
@@ -78,11 +78,15 @@ export function ProfileSettings({
         </label>
         <label>Współczynnik aktywności
           <input type="number" min="1" max="3" step="0.05" value={form.activityFactor} onChange={event => update('activityFactor', event.target.value)} />
-          <small>Domyślnie 1,2. Możesz go zmieniać jawnie wraz ze zmianą codziennej aktywności.</small>
+          <small>Domyślnie 1,2. Wpływa wyłącznie na szacowane TDEE.</small>
         </label>
         <label>Domyślny cel kroków
           <input type="number" min="1" max="100000" step="100" value={form.defaultStepsGoal} onChange={event => update('defaultStepsGoal', event.target.value)} />
           <small>Używany tylko, gdy Garmin nie dostarcza celu na dany dzień.</small>
+        </label>
+        <label>Dzienny cel kcal
+          <input type="number" min="1" max="20000" step="50" value={form.dailyCaloriesGoalKcal} onChange={event => update('dailyCaloriesGoalKcal', event.target.value)} placeholder="np. 2200" />
+          <small>Pozostaw puste, jeśli nie chcesz śledzić celu kalorii. To cel ręczny, niezależny od TDEE.</small>
         </label>
       </div>
 
