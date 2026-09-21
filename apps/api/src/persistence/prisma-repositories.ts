@@ -75,6 +75,7 @@ function mapProfile(row: any): HealthProfileRecord {
     heightCm: row.heightCm ?? null,
     activityFactor: row.activityFactor,
     defaultStepsGoal: row.defaultStepsGoal,
+    dailyCaloriesGoalKcal: row.dailyCaloriesGoalKcal ?? null,
   };
 }
 
