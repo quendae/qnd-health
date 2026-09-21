@@ -2,6 +2,13 @@ export type PlanKind = 'workout' | 'metric_goal' | 'count_goal' | 'manual';
 export type CompletionStrategy = 'metric_auto' | 'count_manual' | 'activity_link' | 'manual';
 export type PlanStatus = 'planned' | 'partial' | 'completed' | 'skipped' | 'moved' | 'replaced';
 
+export interface WorkoutStructure {
+  sets?: number | null;
+  repsPerSet?: number | null;
+  secondsPerSet?: number | null;
+  restSeconds?: number | null;
+}
+
 export interface StoredPlanItem {
   id: string;
   date: string;
@@ -16,6 +23,7 @@ export interface StoredPlanItem {
   activityType?: string | null;
   plannedDurationSeconds?: number | null;
   plannedDistanceMeters?: number | null;
+  workoutStructure?: WorkoutStructure | null;
   linkedActivityId?: string | null;
 }
 
