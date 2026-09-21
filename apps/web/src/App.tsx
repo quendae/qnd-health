@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, BatteryCharging, Brain, CalendarDays, ChevronLeft, ChevronRight,
+  Activity, Brain, CalendarDays, ChevronLeft, ChevronRight, Flame,
   Dumbbell, Gauge, HeartPulse, History, LayoutDashboard, Link2, LogOut,
   Moon, Pencil, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, Trash2, TrendingUp, Utensils, Weight,
 } from 'lucide-react';
@@ -175,12 +175,13 @@ function CoachPanel({ today }: { today: TodayResponse }) {
 
 function HealthMetrics({ today }: { today: TodayResponse }) {
   const health = today.health;
+  const energy = today.energy;
   return <div className="metrics-grid widget-card widget-wide">
     <MetricCard icon={Weight} label="Masa ciała" value={today.latestMeasurement ? today.latestMeasurement.weightKg.toFixed(1) : '—'} unit={today.latestMeasurement ? 'kg' : ''} sub={sourceLabel(today.latestMeasurement?.source)} />
     <MetricCard icon={HeartPulse} label="Tętno spoczynkowe" value={health?.restingHr?.toString() ?? '—'} unit={health?.restingHr ? 'bpm' : ''} sub={sourceLabel(health?.source)} />
     <MetricCard icon={Activity} label="HRV" value={health?.hrv?.toString() ?? '—'} unit={health?.hrv ? 'ms' : ''} sub={sourceLabel(health?.source)} />
     <MetricCard icon={Moon} label="Sen" value={formatDuration(health?.sleepDurationSeconds)} sub={health ? 'Ostatnia noc' : 'Brak danych Garmin'} />
-    <MetricCard icon={BatteryCharging} label="Body Battery" value={health?.bodyBattery?.toString() ?? '—'} unit={health?.bodyBattery != null ? '/100' : ''} sub={sourceLabel(health?.source)} />
+    <MetricCard icon={Flame} label="TDEE" value={energy ? formatMetric(energy.tdeeKcal, 0) : '—'} unit={energy ? 'kcal' : ''} sub={energy ? `Szacowane · aktywność ×${formatMetric(energy.activityFactor, 2)}` : 'Uzupełnij profil w Ustawieniach'} />
   </div>;
 }
 
@@ -265,7 +266,7 @@ export default function App() {
   if (section === 'planner' && api) content = <Planner api={api} selectedDate={date} onError={setError} />;
   else if (section === 'history' && api) content = <HistoryView api={api} selectedDate={date} onError={setError} />;
   else if (section === 'progress' && api) content = <ProgressView api={api} selectedDate={date} onError={setError} />;
-  else if (section === 'settings') content = <SettingsView />;
+  else if (section === 'settings' && api) content = <SettingsView api={api} energy={today?.energy ?? null} onSaved={load} onError={setError} />;
   else if (section === 'coach') content = <section className="placeholder panel"><div><h2>Coach</h2><p>Ten obszar podłączymy do DeepSeek po zebraniu wystarczającej historii danych.</p></div></section>;
   else if (!today) content = <div className="loading-card">Wczytywanie QND Health…</div>;
   else content = <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>;
