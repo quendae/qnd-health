@@ -5,6 +5,12 @@ export interface MeasurementRecord {
   bodyFatPercent: number | null;
   bmi: number | null;
   muscleMassKg: number | null;
+  bodyWaterPercent?: number | null;
+  boneMassKg?: number | null;
+  visceralFat?: number | null;
+  metabolicAge?: number | null;
+  physiqueRating?: number | null;
+  transport?: string | null;
   source: 'garmin' | 'hermes' | 'manual';
 }
 
