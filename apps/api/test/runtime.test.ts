@@ -18,7 +18,7 @@ function fakePrisma() {
     completedActivity: { findMany: vi.fn().mockResolvedValue([]) },
     apiToken: {
       findUnique: vi.fn().mockResolvedValue({
-        id: 'web-token', tokenHash: hashApiToken(rawToken, pepper), scopes: ['today:read'], revokedAt: null,
+        id: 'web-token', tokenHash: hashApiToken(rawToken, pepper), scopesJson: JSON.stringify(['today:read']), revokedAt: null,
       }),
     },
     auditEvent: { create: vi.fn() },
