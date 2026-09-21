@@ -127,6 +127,29 @@ describe('Hermes PlanItem API', () => {
     await app.close();
   });
 
+  it('keeps an activity-link workout completed after explicit manual completion', async () => {
+    const app = buildApp({ tokenPepper: pepper, tokenRepository: tokenRepository(), planRepository: plans });
+    const created = await app.inject({
+      method: 'POST', url: '/api/v1/plans', headers: auth(),
+      payload: {
+        date: '2026-09-21', kind: 'workout', title: 'Rower stacjonarny',
+        completionStrategy: 'activity_link', activityType: 'indoor_cycling', plannedDurationSeconds: 1800,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const completed = await app.inject({
+      method: 'POST', url: '/api/v1/plans/plan-1/progress', headers: auth(), payload: { value: 1 },
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json()).toMatchObject({ status: 'completed', progress: { ratio: 1 } });
+
+    const listed = await app.inject({ method: 'GET', url: '/api/v1/plans', headers: auth() });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().items[0]).toMatchObject({ status: 'completed', progress: { ratio: 1 } });
+    await app.close();
+  });
+
   it('blocks manual progress for provider-derived step goals', async () => {
     const app = buildApp({ tokenPepper: pepper, tokenRepository: tokenRepository(), planRepository: plans });
     const created = await app.inject({
