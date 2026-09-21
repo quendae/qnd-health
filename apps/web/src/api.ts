@@ -1,21 +1,22 @@
-import type { CompletedActivity, HealthProfile, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse, WorkoutStructure } from './types';
+import type {
+  CoachConversation, CoachMessage, CoachTurnResponse, CompletedActivity, HealthProfile, HistoryResponse,
+  NutritionEntry, PlanItem, ProgressResponse, TodayResponse, WorkoutStructure,
+} from './types';
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(message: string, public readonly status: number, public readonly data: unknown = null) {
     super(message);
   }
 }
 
-async function parseError(response: Response): Promise<string> {
-  try {
-    const data = await response.json() as { error?: { message?: string } | string; message?: string };
-    if (typeof data.error === 'object' && data.error?.message) return data.error.message;
-    if (typeof data.error === 'string') return data.error;
-    if (data.message) return data.message;
-  } catch {
-    // fall through
+function errorMessage(data: unknown, status: number): string {
+  if (data && typeof data === 'object') {
+    const body = data as { error?: { message?: string } | string; message?: string };
+    if (typeof body.error === 'object' && body.error?.message) return body.error.message;
+    if (typeof body.error === 'string') return body.error;
+    if (body.message) return body.message;
   }
-  return `Żądanie nie powiodło się (${response.status})`;
+  return `Żądanie nie powiodło się (${status})`;
 }
 
 export interface PlanWriteInput {
@@ -51,7 +52,11 @@ export class QndHealthApi {
       headers.set('Idempotency-Key', crypto.randomUUID());
     }
     const response = await fetch(path, { ...init, headers });
-    if (!response.ok) throw new ApiError(await parseError(response), response.status);
+    if (!response.ok) {
+      let data: unknown = null;
+      try { data = await response.json(); } catch { data = null; }
+      throw new ApiError(errorMessage(data, response.status), response.status, data);
+    }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }
@@ -120,5 +125,27 @@ export class QndHealthApi {
 
   deleteNutrition(id: string) {
     return this.request<void>(`/api/v1/nutrition/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  listCoachConversations() {
+    return this.request<{ conversations: CoachConversation[] }>('/api/v1/coach/conversations');
+  }
+
+  createCoachConversation(title?: string | null) {
+    return this.request<{ conversation: CoachConversation }>('/api/v1/coach/conversations', {
+      method: 'POST', body: JSON.stringify(title ? { title } : {}),
+    });
+  }
+
+  getCoachMessages(conversationId: string) {
+    return this.request<{ conversation: CoachConversation; messages: CoachMessage[] }>(
+      `/api/v1/coach/conversations/${encodeURIComponent(conversationId)}/messages`,
+    );
+  }
+
+  sendCoachMessage(conversationId: string, content: string) {
+    return this.request<CoachTurnResponse>(`/api/v1/coach/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      method: 'POST', body: JSON.stringify({ content }),
+    });
   }
 }
