@@ -1,4 +1,4 @@
-import type { CompletedActivity, HealthProfile, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse } from './types';
+import type { CompletedActivity, HealthProfile, HistoryResponse, NutritionEntry, PlanItem, ProgressResponse, TodayResponse, WorkoutStructure } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -29,6 +29,7 @@ export interface PlanWriteInput {
   activityType?: string | null;
   plannedDurationSeconds?: number | null;
   plannedDistanceMeters?: number | null;
+  workoutStructure?: WorkoutStructure | null;
 }
 
 export type PlanPatchInput = Partial<PlanWriteInput>;
