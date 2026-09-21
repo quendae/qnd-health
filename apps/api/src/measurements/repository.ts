@@ -5,9 +5,14 @@ export interface MeasurementRecord {
   bodyFatPercent: number | null;
   bmi: number | null;
   muscleMassKg: number | null;
+  fatFreeMassKg?: number | null;
+  subcutaneousFatPercent?: number | null;
   bodyWaterPercent?: number | null;
+  skeletalMusclePercent?: number | null;
   boneMassKg?: number | null;
   visceralFat?: number | null;
+  proteinPercent?: number | null;
+  scaleBmrKcal?: number | null;
   metabolicAge?: number | null;
   physiqueRating?: number | null;
   transport?: string | null;
