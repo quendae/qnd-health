@@ -30,7 +30,7 @@ describe('Garmin via Home Assistant ingestion API', () => {
       url: '/api/v1/health/daily/2026-09-21',
       headers: auth,
       payload: {
-        source: 'garmin', transport: 'home_assistant', steps: 6842, floorsAscended: 12,
+        source: 'garmin', transport: 'home_assistant', steps: 6842, stepsGoal: 9000, floorsAscended: 12,
         restingHr: 61, hrv: 43, stress: 28, bodyBattery: 67, sleepDurationSeconds: 26760,
         spo2: 96, respiration: 14.2, calories: 2140, activeCalories: 487, hydrationMl: 1800,
         sleepStages: { deepSeconds: 5100, remSeconds: 4800 }, readiness: { score: 72, status: 'GOOD' },
@@ -38,8 +38,8 @@ describe('Garmin via Home Assistant ingestion API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ date: '2026-09-21', source: 'garmin', steps: 6842, bodyBattery: 67 });
-    expect(saved).toMatchObject({ transport: 'home_assistant', sleepStages: { deepSeconds: 5100 }, readiness: { score: 72 } });
+    expect(response.json()).toMatchObject({ date: '2026-09-21', source: 'garmin', steps: 6842, stepsGoal: 9000, bodyBattery: 67 });
+    expect(saved).toMatchObject({ transport: 'home_assistant', stepsGoal: 9000, sleepStages: { deepSeconds: 5100 }, readiness: { score: 72 } });
     await app.close();
   });
 
