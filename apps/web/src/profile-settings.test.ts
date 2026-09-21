@@ -4,33 +4,36 @@ import { buildProfilePatch, profileFormDefaults } from './profile-settings';
 describe('health profile settings helpers', () => {
   it('uses phase-one defaults before a profile exists', () => {
     expect(profileFormDefaults(null)).toEqual({
-      dateOfBirth: '', sexForBmr: '', heightCm: '', activityFactor: '1.2', defaultStepsGoal: '7500',
+      dateOfBirth: '', sexForBmr: '', heightCm: '', activityFactor: '1.2', defaultStepsGoal: '7500', dailyCaloriesGoalKcal: '',
     });
   });
 
   it('maps an existing profile into editable strings', () => {
     expect(profileFormDefaults({
       id: 'default', dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: 180,
-      activityFactor: 1.35, defaultStepsGoal: 8500,
+      activityFactor: 1.35, defaultStepsGoal: 8500, dailyCaloriesGoalKcal: 2200,
     })).toEqual({
-      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '180', activityFactor: '1.35', defaultStepsGoal: '8500',
+      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '180', activityFactor: '1.35', defaultStepsGoal: '8500', dailyCaloriesGoalKcal: '2200',
     });
   });
 
   it('builds nullable profile fields without inventing missing data', () => {
     expect(buildProfilePatch({
-      dateOfBirth: '', sexForBmr: '', heightCm: '', activityFactor: '1.2', defaultStepsGoal: '7500',
+      dateOfBirth: '', sexForBmr: '', heightCm: '', activityFactor: '1.2', defaultStepsGoal: '7500', dailyCaloriesGoalKcal: '',
     })).toEqual({
-      dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500,
+      dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: null,
     });
   });
 
   it('rejects invalid numeric form values before the API request', () => {
     expect(() => buildProfilePatch({
-      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '0', activityFactor: '1.2', defaultStepsGoal: '7500',
+      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '0', activityFactor: '1.2', defaultStepsGoal: '7500', dailyCaloriesGoalKcal: '2200',
     })).toThrow('Wzrost musi być większy od zera');
     expect(() => buildProfilePatch({
-      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '180', activityFactor: '0', defaultStepsGoal: '7500',
+      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '180', activityFactor: '0', defaultStepsGoal: '7500', dailyCaloriesGoalKcal: '2200',
     })).toThrow('Współczynnik aktywności musi być większy od zera');
+    expect(() => buildProfilePatch({
+      dateOfBirth: '1990-09-21', sexForBmr: 'male', heightCm: '180', activityFactor: '1.2', defaultStepsGoal: '7500', dailyCaloriesGoalKcal: '0',
+    })).toThrow('Cel kcal musi być dodatnią liczbą całkowitą');
   });
 });
