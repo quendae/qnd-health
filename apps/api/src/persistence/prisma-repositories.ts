@@ -4,6 +4,7 @@ import type { MeasurementRepository, MeasurementRecord, NewMeasurementRecord } f
 import type { DailyHealthRepository, DailyHealthRecord, DailyHealthUpsert } from '../health/repository.js';
 import type { CompletedActivityRepository, CompletedActivityRecord, ProviderActivityUpsert } from '../activities/repository.js';
 import type { ActivityMatchRepository } from '../activities/matches.js';
+import type { HealthProfileRepository, HealthProfileRecord, HealthProfilePatch } from '../profile/repository.js';
 import type { ApiTokenRepository } from '../auth/service.js';
 import type { AuditRepository } from '../audit/repository.js';
 import type { IdempotencyRepository, IdempotencyRecord } from '../idempotency/repository.js';
@@ -63,6 +64,25 @@ function mapMeasurement(row: any): MeasurementRecord {
     boneMassKg: row.boneMassKg ?? null, visceralFat: row.visceralFat ?? null,
     metabolicAge: row.metabolicAge ?? null, physiqueRating: row.physiqueRating ?? null,
     transport: row.transport ?? null, source: row.source,
+  };
+}
+
+function mapProfile(row: any): HealthProfileRecord {
+  return {
+    id: 'default',
+    dateOfBirth: row.dateOfBirth ? formatDateOnly(row.dateOfBirth) : null,
+    sexForBmr: row.sexForBmr ?? null,
+    heightCm: row.heightCm ?? null,
+    activityFactor: row.activityFactor,
+    defaultStepsGoal: row.defaultStepsGoal,
+  };
+}
+
+function profileData(patch: HealthProfilePatch) {
+  const { dateOfBirth, ...rest } = patch;
+  return {
+    ...rest,
+    ...(dateOfBirth !== undefined ? { dateOfBirth: dateOfBirth === null ? null : dateOnly(dateOfBirth) } : {}),
   };
 }
 
@@ -171,6 +191,22 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
     async list(from, to) { return (await prisma.bodyMeasurement.findMany({ where: rangeWhere('measuredAt', from, to), orderBy: { measuredAt: 'desc' } })).map(mapMeasurement); },
   };
 
+  const profileRepository: HealthProfileRepository = {
+    async get() {
+      const row = await prisma.healthProfile.findUnique({ where: { id: 'default' } });
+      return row ? mapProfile(row) : null;
+    },
+    async upsert(patch) {
+      const data = profileData(patch);
+      const row = await prisma.healthProfile.upsert({
+        where: { id: 'default' },
+        create: { id: 'default', ...data },
+        update: data,
+      });
+      return mapProfile(row);
+    },
+  };
+
   const dailyHealthRepository: DailyHealthRepository = {
     async findByDate(date) {
       const row = await prisma.dailyHealth.findFirst({ where: { date: dateOnly(date) }, orderBy: [{ source: 'asc' }, { updatedAt: 'desc' }] });
@@ -238,5 +274,5 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
     },
   };
 
-  return { planRepository, nutritionRepository, measurementRepository, dailyHealthRepository, completedActivityRepository, activityMatchRepository, tokenRepository, auditRepository, idempotencyRepository };
+  return { planRepository, nutritionRepository, measurementRepository, profileRepository, dailyHealthRepository, completedActivityRepository, activityMatchRepository, tokenRepository, auditRepository, idempotencyRepository };
 }
