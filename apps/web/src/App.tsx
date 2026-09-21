@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, BatteryCharging, Brain, CalendarDays, ChevronLeft, ChevronRight,
   Dumbbell, Gauge, HeartPulse, History, LayoutDashboard, Link2, LogOut,
-  Moon, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, TrendingUp, Utensils, Weight,
+  Moon, Pencil, Plus, RefreshCw, Settings, SlidersHorizontal, Sparkles, Trash2, TrendingUp, Utensils, Weight,
 } from 'lucide-react';
 import { ApiError, QndHealthApi } from './api';
 import { CustomActivityDialog } from './CustomActivityDialog';
+import { NutritionEntryDialog } from './NutritionEntryDialog';
 import { HistoryView } from './HistoryView';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
 import { SettingsView } from './SettingsView';
 import { WidgetSettings } from './WidgetSettings';
-import type { ActivityCandidate, PlanItem, TodayResponse } from './types';
+import type { ActivityCandidate, NutritionEntry, PlanItem, TodayResponse } from './types';
+import { formatMetric } from './format-number';
 import { dateLabel, formatDistance, formatDuration, greeting, progressPercent, shortDateLabel, weekCompletion } from './view-model';
 import { defaultTodayWidgetLayout, normalizeTodayWidgetLayout, type TodayWidgetId, type TodayWidgetPreference } from './widget-layout';
 
@@ -39,10 +41,6 @@ function statusLabel(item: PlanItem) {
   if (item.status === 'partial') return 'W trakcie';
   if (item.status === 'skipped') return 'Pominięte';
   return 'Zaplanowane';
-}
-
-function mealTypeLabel(value: string) {
-  return ({ breakfast: 'Śniadanie', lunch: 'Lunch', dinner: 'Obiad', snack: 'Przekąska', other: 'Inne' } as Record<string, string>)[value] ?? value;
 }
 
 function sourceLabel(value: string | undefined | null) {
@@ -108,18 +106,33 @@ function ActivityPanel({ today, mutate, busyId, onAddActivity }: {
   </section>;
 }
 
-function NutritionPanel({ today }: { today: TodayResponse }) {
-  const { totals, completeness } = today.nutrition.summary;
+function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
+  today: TodayResponse;
+  onEdit: (entry: NutritionEntry) => void;
+  onDelete: (entry: NutritionEntry) => void;
+  deletingId: string | null;
+}) {
+  const { totals } = today.nutrition.summary;
   const macro = [
-    ['Białko', totals.proteinGrams, completeness.proteinGrams], ['Węglowodany', totals.carbsGrams, completeness.carbsGrams],
-    ['Tłuszcz', totals.fatGrams, completeness.fatGrams], ['Błonnik', totals.fiberGrams, completeness.fiberGrams],
+    ['Białko', totals.proteinGrams], ['Węglowodany', totals.carbsGrams],
+    ['Tłuszcz', totals.fatGrams], ['Błonnik', totals.fiberGrams],
   ] as const;
   return <section className="panel nutrition-panel widget-card">
     <header><div><h2><Utensils /> Odżywianie</h2><p>Podsumowanie tego, co zostało zapisane.</p></div><span className="section-link orange">Dzienny bilans</span></header>
-    <div className="calorie-head"><strong>{totals.caloriesKcal == null ? '—' : totals.caloriesKcal} <small>{totals.caloriesKcal == null ? '' : 'kcal'}</small></strong><span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'posiłek' : 'posiłków'}</span></div>
-    <div className="macros">{macro.map(([label, value, complete]) => <div key={label}><span>{label}</span><strong>{value == null ? '—' : `${value} g`}</strong><small>{complete ? 'Dane kompletne' : 'Brak części danych'}</small></div>)}</div>
-    <div className="meals-head"><h3>Dzisiejsze posiłki</h3></div>
-    <div className="meal-list">{today.nutrition.entries.length === 0 && <div className="empty">Nie zapisano jeszcze żadnego posiłku.</div>}{today.nutrition.entries.map(entry => <div className="meal" key={entry.id}><time>{new Date(entry.consumedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</time><div><strong>{entry.title}</strong><span>{mealTypeLabel(entry.mealType)}</span></div><div className="meal-macros"><strong>{entry.caloriesKcal == null ? '—' : `${entry.caloriesKcal} kcal`}</strong><span>B {entry.proteinGrams ?? '—'} · W {entry.carbsGrams ?? '—'} · T {entry.fatGrams ?? '—'}</span></div></div>)}</div>
+    <div className="calorie-head"><strong>{formatMetric(totals.caloriesKcal, 0)} <small>{totals.caloriesKcal == null ? '' : 'kcal'}</small></strong><span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span></div>
+    <div className="macros">{macro.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value == null ? '—' : `${formatMetric(value)} g`}</strong></div>)}</div>
+    <div className="meals-head"><h3>Dzisiejsze wpisy</h3></div>
+    <div className="meal-list">
+      {today.nutrition.entries.length === 0 && <div className="empty">Nie zapisano jeszcze żadnego jedzenia.</div>}
+      {today.nutrition.entries.map(entry => <div className="meal nutrition-entry" key={entry.id}>
+        <div className="meal-copy"><strong>{entry.title}</strong>{entry.quantityText && <span>{entry.quantityText}</span>}</div>
+        <div className="meal-macros"><strong>{entry.caloriesKcal == null ? '—' : `${formatMetric(entry.caloriesKcal, 0)} kcal`}</strong><span>B {formatMetric(entry.proteinGrams)} · W {formatMetric(entry.carbsGrams)} · T {formatMetric(entry.fatGrams)}</span></div>
+        <div className="nutrition-entry-actions">
+          <button className="icon-button" onClick={() => onEdit(entry)} aria-label={`Edytuj ${entry.title}`}><Pencil size={15} /></button>
+          <button className="icon-button danger" onClick={() => onDelete(entry)} disabled={deletingId === entry.id} aria-label={`Usuń ${entry.title}`}><Trash2 size={15} /></button>
+        </div>
+      </div>)}
+    </div>
   </section>;
 }
 
@@ -170,6 +183,8 @@ export default function App() {
   const [widgetLayout, setWidgetLayout] = useState<TodayWidgetPreference[]>(loadWidgetLayout);
   const [showWidgetSettings, setShowWidgetSettings] = useState(false);
   const [showCustomActivity, setShowCustomActivity] = useState(false);
+  const [editingNutrition, setEditingNutrition] = useState<NutritionEntry | null>(null);
+  const [deletingNutritionId, setDeletingNutritionId] = useState<string | null>(null);
   const api = useMemo(() => token ? new QndHealthApi(token) : null, [token]);
 
   const load = useCallback(async () => {
@@ -195,6 +210,18 @@ export default function App() {
     finally { setBusyId(null); }
   }
 
+  async function deleteNutrition(entry: NutritionEntry) {
+    if (!api || deletingNutritionId) return;
+    if (!window.confirm(`Usunąć wpis „${entry.title}”?`)) return;
+    setDeletingNutritionId(entry.id); setError(null);
+    try {
+      await api.deleteNutrition(entry.id);
+      if (editingNutrition?.id === entry.id) setEditingNutrition(null);
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Nie udało się usunąć wpisu.'); }
+    finally { setDeletingNutritionId(null); }
+  }
+
   function saveToken(value: string) { sessionStorage.setItem(TOKEN_KEY, value); setToken(value); }
   function signOut() { sessionStorage.removeItem(TOKEN_KEY); setToken(''); setToday(null); }
   function setWidgets(next: TodayWidgetPreference[]) { setWidgetLayout(normalizeTodayWidgetLayout(next)); }
@@ -206,7 +233,7 @@ export default function App() {
     if (!today) return null;
     if (id === 'health_metrics') return <HealthMetrics today={today} />;
     if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} />;
-    if (id === 'nutrition') return <NutritionPanel today={today} />;
+    if (id === 'nutrition') return <NutritionPanel today={today} onEdit={setEditingNutrition} onDelete={(entry) => void deleteNutrition(entry)} deletingId={deletingNutritionId} />;
     if (id === 'week_progress') return <WeekProgress today={today} />;
     if (id === 'remaining_week') return <RemainingWeek today={today} />;
     return <CoachPanel today={today} />;
@@ -230,5 +257,6 @@ export default function App() {
     </main>
     {showWidgetSettings && <WidgetSettings layout={widgetLayout} onChange={setWidgets} onClose={() => setShowWidgetSettings(false)} />}
     {showCustomActivity && api && <CustomActivityDialog api={api} date={date} onClose={() => setShowCustomActivity(false)} onCreated={load} />}
+    {editingNutrition && api && <NutritionEntryDialog api={api} entry={editingNutrition} onClose={() => setEditingNutrition(null)} onSaved={load} />}
   </div>;
 }
