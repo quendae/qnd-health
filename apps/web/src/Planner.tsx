@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { QndHealthApi, type PlanWriteInput } from './api';
-import type { PlanItem } from './types';
+import type { PlanItem, WorkoutStructure } from './types';
+import { activityCatalog, activityCatalogItem, activityLabel } from './activity-catalog';
 import { formatDistance, formatDuration } from './view-model';
 
 function isoDate(value: Date) { return value.toISOString().slice(0, 10); }
@@ -36,9 +37,23 @@ function statusLabel(status: PlanItem['status']) {
 function kindLabel(kind: PlanItem['kind']) {
   return ({ workout: 'Trening', metric_goal: 'Cel z Garmina', count_goal: 'Licznik ręczny', manual: 'Zadanie' } as const)[kind];
 }
+function structureDetail(structure: WorkoutStructure | null | undefined): string | null {
+  if (!structure) return null;
+  const pieces: string[] = [];
+  if (structure.sets) pieces.push(`${structure.sets} serie`);
+  if (structure.repsPerSet) pieces.push(`${structure.repsPerSet} powt./serię`);
+  if (structure.secondsPerSet) pieces.push(`${structure.secondsPerSet} s/serię`);
+  if (structure.restSeconds != null) pieces.push(`przerwa ${structure.restSeconds} s`);
+  return pieces.length ? pieces.join(' · ') : null;
+}
 function itemDetail(item: PlanItem) {
   if (item.kind === 'workout') {
-    const bits = [item.activityType, item.plannedDurationSeconds ? formatDuration(item.plannedDurationSeconds) : null, item.plannedDistanceMeters ? formatDistance(item.plannedDistanceMeters) : null];
+    const bits = [
+      item.activityType ? activityLabel(item.activityType) : null,
+      structureDetail(item.workoutStructure),
+      item.plannedDurationSeconds ? formatDuration(item.plannedDurationSeconds) : null,
+      item.plannedDistanceMeters ? formatDistance(item.plannedDistanceMeters) : null,
+    ];
     return bits.filter(Boolean).join(' · ');
   }
   if (item.targetValue != null) return `${item.targetValue} ${item.unit ?? ''}`.trim();
@@ -55,10 +70,17 @@ interface FormState {
   activityType: string;
   durationMinutes: string;
   distanceKm: string;
+  sets: string;
+  repsPerSet: string;
+  secondsPerSet: string;
+  restSeconds: string;
 }
 
 function emptyForm(date: string): FormState {
-  return { date, kind: 'workout', title: '', metricKey: 'steps', targetValue: '', unit: '', activityType: 'walking', durationMinutes: '', distanceKm: '' };
+  return {
+    date, kind: 'workout', title: '', metricKey: 'steps', targetValue: '', unit: '', activityType: 'walking',
+    durationMinutes: '', distanceKm: '', sets: '', repsPerSet: '', secondsPerSet: '', restSeconds: '',
+  };
 }
 function formFromItem(item: PlanItem): FormState {
   return {
@@ -71,7 +93,31 @@ function formFromItem(item: PlanItem): FormState {
     activityType: item.activityType ?? 'walking',
     durationMinutes: item.plannedDurationSeconds ? String(Math.round(item.plannedDurationSeconds / 60)) : '',
     distanceKm: item.plannedDistanceMeters ? String(item.plannedDistanceMeters / 1000) : '',
+    sets: item.workoutStructure?.sets?.toString() ?? '',
+    repsPerSet: item.workoutStructure?.repsPerSet?.toString() ?? '',
+    secondsPerSet: item.workoutStructure?.secondsPerSet?.toString() ?? '',
+    restSeconds: item.workoutStructure?.restSeconds?.toString() ?? '',
   };
+}
+function positiveInteger(value: string): number | null {
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+function nonNegativeInteger(value: string): number | null {
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+function workoutStructure(form: FormState): WorkoutStructure | null {
+  const mode = activityCatalogItem(form.activityType).structure;
+  if (mode !== 'reps' && mode !== 'seconds') return null;
+  const structure: WorkoutStructure = {
+    sets: positiveInteger(form.sets),
+    restSeconds: nonNegativeInteger(form.restSeconds),
+    ...(mode === 'reps' ? { repsPerSet: positiveInteger(form.repsPerSet) } : { secondsPerSet: positiveInteger(form.secondsPerSet) }),
+  };
+  return Object.values(structure).some(value => value != null) ? structure : null;
 }
 function toPayload(form: FormState): PlanWriteInput {
   const common = { date: form.date, kind: form.kind, title: form.title.trim() };
@@ -88,6 +134,7 @@ function toPayload(form: FormState): PlanWriteInput {
     activityType: form.activityType.trim() || 'other',
     plannedDurationSeconds: form.durationMinutes ? Number(form.durationMinutes) * 60 : null,
     plannedDistanceMeters: form.distanceKm ? Number(form.distanceKm) * 1000 : null,
+    workoutStructure: workoutStructure(form),
   };
 }
 
@@ -95,7 +142,17 @@ function PlanDialog({ initialDate, item, busy, onClose, onSave }: { initialDate:
   const [form, setForm] = useState<FormState>(() => item ? formFromItem(item) : emptyForm(initialDate));
   const set = (patch: Partial<FormState>) => setForm(current => ({ ...current, ...patch }));
   const needsTarget = form.kind === 'metric_goal' || form.kind === 'count_goal';
+  const selectedActivity = activityCatalogItem(form.activityType);
+  const structured = form.kind === 'workout' && (selectedActivity.structure === 'reps' || selectedActivity.structure === 'seconds');
+  const timed = form.kind === 'workout' && !structured;
   const valid = form.title.trim() && (!needsTarget || Number(form.targetValue) > 0);
+
+  function changeActivity(value: string) {
+    const previous = activityCatalogItem(form.activityType);
+    const next = activityCatalogItem(value);
+    const titleIsPreset = !form.title.trim() || form.title === previous.defaultTitle;
+    set({ activityType: value, ...(titleIsPreset ? { title: next.defaultTitle } : {}) });
+  }
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onClose(); }}>
     <div className="plan-dialog" role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title">
@@ -104,10 +161,18 @@ function PlanDialog({ initialDate, item, busy, onClose, onSave }: { initialDate:
         <label><span>Data</span><input type="date" value={form.date} onChange={e => set({ date: e.target.value })} /></label>
         <label><span>Typ</span><select value={form.kind} onChange={e => set({ kind: e.target.value as FormState['kind'] })}><option value="workout">Trening</option><option value="metric_goal">Cel z Garmina</option><option value="count_goal">Licznik ręczny</option><option value="manual">Zadanie</option></select></label>
         <label className="wide"><span>Nazwa</span><input autoFocus value={form.title} onChange={e => set({ title: e.target.value })} placeholder={form.kind === 'workout' ? 'np. Spokojny marsz' : 'np. Schody'} /></label>
-        {form.kind === 'metric_goal' && <><label><span>Metryka</span><select value={form.metricKey} onChange={e => set({ metricKey: e.target.value })}><option value="steps">Kroki</option><option value="floorsAscended">Piętra</option><option value="intensityMinutes">Minuty intensywne</option><option value="activeCalories">Kalorie aktywne</option></select></label><label><span>Jednostka</span><input value={form.unit} onChange={e => set({ unit: e.target.value })} placeholder="np. kroków" /></label></>}
+        {form.kind === 'metric_goal' && <><label><span>Metryka</span><select value={form.metricKey} onChange={e => set({ metricKey: e.target.value })}><option value="steps">Kroki</option><option value="floorsAscended">Piętra</option><option value="intensityMinutes">Minuty aktywne</option><option value="activeCalories">Kalorie aktywne</option></select></label><label><span>Jednostka</span><input value={form.unit} onChange={e => set({ unit: e.target.value })} placeholder="np. kroków" /></label></>}
         {needsTarget && <label><span>Cel</span><input type="number" min="0" step="any" value={form.targetValue} onChange={e => set({ targetValue: e.target.value })} /></label>}
         {form.kind === 'count_goal' && <label><span>Jednostka</span><input value={form.unit} onChange={e => set({ unit: e.target.value })} placeholder="np. rund" /></label>}
-        {form.kind === 'workout' && <><label><span>Aktywność</span><select value={form.activityType} onChange={e => set({ activityType: e.target.value })}><option value="walking">Marsz</option><option value="running">Bieg</option><option value="cycling">Rower</option><option value="strength_training">Siłownia</option><option value="other">Inna</option></select></label><label><span>Czas (min)</span><input type="number" min="1" value={form.durationMinutes} onChange={e => set({ durationMinutes: e.target.value })} /></label><label><span>Dystans (km)</span><input type="number" min="0" step="0.1" value={form.distanceKm} onChange={e => set({ distanceKm: e.target.value })} /></label></>}
+        {form.kind === 'workout' && <>
+          <label><span>Aktywność</span><select value={form.activityType} onChange={e => changeActivity(e.target.value)}>{activityCatalog.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+          {timed && <><label><span>Czas (min)</span><input type="number" min="1" value={form.durationMinutes} onChange={e => set({ durationMinutes: e.target.value })} /></label><label><span>Dystans (km)</span><input type="number" min="0" step="0.1" value={form.distanceKm} onChange={e => set({ distanceKm: e.target.value })} /></label></>}
+          {structured && <>
+            <label><span>Liczba serii</span><input type="number" min="1" step="1" value={form.sets} onChange={e => set({ sets: e.target.value })} /></label>
+            {selectedActivity.structure === 'reps' ? <label><span>Powtórzeń w serii</span><input type="number" min="1" step="1" value={form.repsPerSet} onChange={e => set({ repsPerSet: e.target.value })} /></label> : <label><span>Czas serii (s)</span><input type="number" min="1" step="1" value={form.secondsPerSet} onChange={e => set({ secondsPerSet: e.target.value })} /></label>}
+            <label><span>Przerwa między seriami (s)</span><input type="number" min="0" step="5" value={form.restSeconds} onChange={e => set({ restSeconds: e.target.value })} /></label>
+          </>}
+        </>}
       </div>
       <footer><button className="ghost" onClick={onClose}>Anuluj</button><button className="primary" disabled={!valid || busy} onClick={() => onSave(toPayload(form))}>{busy ? 'Zapisywanie…' : item ? 'Zapisz zmiany' : 'Dodaj do planu'}</button></footer>
     </div>
