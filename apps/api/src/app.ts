@@ -95,6 +95,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       measurementRepository: options.measurementRepository,
       dailyHealthRepository: options.dailyHealthRepository,
       completedActivityRepository: options.completedActivityRepository,
+      nutritionRepository: options.nutritionRepository,
+      profileRepository: options.profileRepository,
       timeZone,
     });
   }
