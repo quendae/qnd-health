@@ -7,13 +7,19 @@ export interface PlanProgress {
   status: PlanStatus;
 }
 
-export interface ActivityCandidate {
+export interface CompletedActivity {
   id: string;
   provider: string;
   activityType: string;
   startedAt: string;
   durationSeconds?: number | null;
   distanceMeters?: number | null;
+  avgHr?: number | null;
+  maxHr?: number | null;
+  calories?: number | null;
+}
+
+export interface ActivityCandidate extends CompletedActivity {
   score: number;
 }
 
