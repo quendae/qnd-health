@@ -57,7 +57,7 @@ function progressFor(plan: StoredPlanItem) {
     strategy: plan.completionStrategy,
     targetValue: plan.targetValue,
     currentValue: plan.currentManualValue,
-    manualCompleted: plan.completionStrategy === 'manual' && plan.status === 'completed',
+    manualCompleted: (plan.completionStrategy === 'manual' || plan.completionStrategy === 'activity_link') && plan.status === 'completed',
     linkedActivityId: plan.linkedActivityId ?? null,
   });
 }
