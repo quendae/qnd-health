@@ -10,6 +10,7 @@ import type { DailyHealthRecord, DailyHealthRepository } from '../health/reposit
 import type { CompletedActivityRepository } from '../activities/repository.js';
 import { localIsoDate, weekBounds } from './date-utils.js';
 import { sendValidationError } from '../http/errors.js';
+import { resolveStepGoal } from './step-goal.js';
 
 const querySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
 
@@ -29,7 +30,7 @@ function planProgress(plan: StoredPlanItem, health: DailyHealthRecord | null) {
     targetValue: plan.targetValue,
     currentValue,
     linkedActivityId: plan.linkedActivityId ?? null,
-    manualCompleted: plan.completionStrategy === 'manual' && plan.status === 'completed',
+    manualCompleted: (plan.completionStrategy === 'manual' || plan.completionStrategy === 'activity_link') && plan.status === 'completed',
   });
 }
 
@@ -83,6 +84,9 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
       return { ...plan, status: progress.status, progress, candidates };
     });
 
+    const stepGoal = resolveStepGoal(health?.stepsGoal, null);
+    const steps = typeof health?.steps === 'number' && Number.isFinite(health.steps) && health.steps >= 0 ? health.steps : 0;
+
     const toDatePlans = weekPlans.filter((plan) => plan.date <= date);
     const toDateProgress = toDatePlans.map((plan) => planProgress(plan, plan.date === date ? health : null));
 
@@ -90,7 +94,10 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
       date,
       health,
       latestMeasurement: [...measurements].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0] ?? null,
-      activity: { items: activityItems },
+      activity: {
+        steps: { current: steps, target: stepGoal.target, goalSource: stepGoal.source },
+        items: activityItems,
+      },
       nutrition: {
         entries: todaysNutrition,
         summary: summarizeNutrition(date, todaysNutrition),
