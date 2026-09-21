@@ -78,6 +78,7 @@ model CompletedActivity {
   id                    String        @id @default(uuid())
   provider              DataSource
   providerActivityId    String?
+  transport             String?
   activityType          String
   startedAt             DateTime
   durationSeconds       Int?
@@ -114,6 +115,7 @@ model DailyHealth {
   id                   String     @id @default(uuid())
   date                 DateTime
   source               DataSource
+  transport            String?
   steps                Int?
   floorsAscended       Float?
   intensityMinutes     Int?
@@ -141,10 +143,16 @@ model BodyMeasurement {
   id                  String     @id @default(uuid())
   measuredAt          DateTime
   source              DataSource
+  transport           String?
   weightKg            Float
   bodyFatPercent      Float?
   bmi                 Float?
   muscleMassKg        Float?
+  bodyWaterPercent    Float?
+  boneMassKg          Float?
+  visceralFat         Float?
+  metabolicAge        Float?
+  physiqueRating      Float?
   rawProviderDataJson Json?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
