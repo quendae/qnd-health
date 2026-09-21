@@ -127,6 +127,25 @@ describe('Hermes PlanItem API', () => {
     await app.close();
   });
 
+  it('stores sets, reps and rest for structured workouts', async () => {
+    const app = buildApp({ tokenPepper: pepper, tokenRepository: tokenRepository(), planRepository: plans });
+    const created = await app.inject({
+      method: 'POST', url: '/api/v1/plans', headers: auth(),
+      payload: {
+        date: '2026-09-22', kind: 'workout', title: 'Pompki', completionStrategy: 'manual',
+        activityType: 'pushups',
+        workoutStructure: { sets: 4, repsPerSet: 12, restSeconds: 90 },
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      title: 'Pompki', activityType: 'pushups',
+      workoutStructure: { sets: 4, repsPerSet: 12, restSeconds: 90 },
+    });
+    await app.close();
+  });
+
   it('keeps an activity-link workout completed after explicit manual completion', async () => {
     const app = buildApp({ tokenPepper: pepper, tokenRepository: tokenRepository(), planRepository: plans });
     const created = await app.inject({
