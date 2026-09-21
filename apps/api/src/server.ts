@@ -11,6 +11,9 @@ const app = buildRuntimeApp({
   prisma,
   tokenPepper: config.tokenPepper,
   timeZone: config.timeZone,
+  deepseekApiKey: config.deepseekApiKey,
+  deepseekBaseUrl: config.deepseekBaseUrl,
+  deepseekModel: config.deepseekModel,
 });
 
 await registerWebFrontend(app, config.webDistPath);
