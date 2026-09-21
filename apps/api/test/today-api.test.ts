@@ -88,7 +88,7 @@ const dailyHealthRepository = {
   async findByDate(date: string) {
     return date === '2026-09-21'
       ? {
-          date, source: 'garmin', steps: 6120, floorsAscended: 9,
+          date, source: 'garmin', steps: 6120, stepsGoal: 9000, floorsAscended: 9,
           restingHr: 64, hrv: 47, bodyBattery: 76,
           sleepDurationSeconds: 27180,
         }
@@ -139,9 +139,12 @@ describe('GET /api/v1/today', () => {
     expect(body).toMatchObject({
       date: '2026-09-21',
       health: {
-        source: 'garmin', steps: 6120, restingHr: 64, bodyBattery: 76,
+        source: 'garmin', steps: 6120, stepsGoal: 9000, restingHr: 64, bodyBattery: 76,
       },
       latestMeasurement: { weightKg: 122.8 },
+      activity: {
+        steps: { current: 6120, target: 9000, goalSource: 'garmin' },
+      },
       nutrition: {
         summary: {
           entryCount: 1,
@@ -166,7 +169,7 @@ describe('GET /api/v1/today', () => {
     await app.close();
   });
 
-  it('remains useful when Garmin health data is absent', async () => {
+  it('returns permanent fallback steps even when Garmin health data is absent', async () => {
     const app = buildApp({
       tokenPepper: pepper,
       tokenRepository: tokenRepository(),
@@ -184,7 +187,11 @@ describe('GET /api/v1/today', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ date: '2026-09-21', health: null });
+    expect(response.json()).toMatchObject({
+      date: '2026-09-21',
+      health: null,
+      activity: { steps: { current: 0, target: 7500, goalSource: 'fallback' } },
+    });
     expect(response.json().activity.items.find((item: any) => item.id === 'steps')).toMatchObject({
       status: 'planned', progress: { currentValue: 0, targetValue: 7500 },
     });
