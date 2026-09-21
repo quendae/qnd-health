@@ -36,6 +36,18 @@ export const openApiDocument = {
       get: { summary: 'List plan items', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Plan item list' } } },
       post: { summary: 'Create a plan item', security: [{ bearerAuth: [] }], parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }], responses: { '201': { description: 'Created plan item' } } },
     },
+    '/api/v1/plans/{id}': {
+      patch: {
+        summary: 'Edit or move a plan item', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Updated plan item' }, '404': { description: 'Plan item not found' }, '422': { description: 'Invalid plan update' } },
+      },
+      delete: {
+        summary: 'Delete a plan item', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        responses: { '204': { description: 'Plan item deleted' }, '404': { description: 'Plan item not found' } },
+      },
+    },
     '/api/v1/plans/{id}/activity': {
       post: {
         summary: 'Attach a completed Garmin/FIT activity to an activity-link plan', security: [{ bearerAuth: [] }],
