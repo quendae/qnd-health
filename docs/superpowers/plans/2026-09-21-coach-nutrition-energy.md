@@ -4,9 +4,9 @@
 
 **Goal:** Extend QND Health with editable nutrition, permanent steps and quick activity logging, BMR/TDEE/profile support, richer Garmin ingestion, and an action-capable DeepSeek Coach chat.
 
-**Architecture:** Keep all writes behind the existing Fastify/domain/repository boundaries. Today remains a composed read model; new profile/energy helpers feed it without duplicating provider data. DeepSeek runs server-side only and may call a fixed allow-list of internal application tools that reuse the same validation/audit semantics as REST routes.
+**Architecture:** Keep all writes behind the existing Fastify/domain/repository boundaries. Today remains a composed read model; profile/energy helpers feed it without duplicating provider data. DeepSeek runs server-side only and calls a fixed allow-list of internal QND Health tools that reuse validation, audit and repository semantics.
 
-**Tech Stack:** Node 22, TypeScript, Fastify 5, Prisma 7 + SQLite, React 19/Vite, Vitest, Zod, DeepSeek OpenAI-compatible chat API.
+**Tech Stack:** Node 22, TypeScript, Fastify 5, Prisma 7 + SQLite, React/Vite, Vitest, Zod, DeepSeek OpenAI-compatible chat API.
 
 **Spec:** `docs/superpowers/specs/2026-09-21-coach-nutrition-energy-design.md`
 
@@ -15,129 +15,129 @@
 - User-facing UI is Polish.
 - Missing health/nutrition data stays `null`/unknown and is never silently converted to zero.
 - Garmin data ingested through Home Assistant keeps `source=garmin` and `transport=home_assistant`.
-- Default step goal fallback is exactly `7500` when neither provider nor profile supplies a goal.
+- Default step goal fallback is exactly `7500` when neither provider nor profile supplies a valid goal.
 - Phase-1 BMR uses Mifflin-St Jeor; Phase-1 TDEE is `BMR × activityFactor`.
-- Initial `activityFactor` default is exactly `1.2` and must be visible/editable in Settings.
+- Initial `activityFactor` is exactly `1.2`, visible/editable in Settings.
 - DeepSeek credentials stay server-side; browser never calls DeepSeek directly.
-- DeepSeek may execute only allow-listed QND Health tools and may not run arbitrary HTTP, SQL, shell, or arbitrary endpoint calls.
-- Explicit unambiguous user commands are executed immediately; ambiguous commands ask one focused question; Coach-originated destructive/significant proposals require presentation before execution.
+- Default DeepSeek model alias is `deepseek-chat`; it remains overrideable via `DEEPSEEK_MODEL`.
+- DeepSeek may execute only allow-listed QND Health tools; no arbitrary HTTP, SQL, shell or endpoint execution.
+- Explicit unambiguous user commands execute immediately; ambiguous commands ask one focused question; Coach-originated destructive/significant proposals are presented before execution.
 - Coach receives normalized summaries, never raw Garmin/Home Assistant payload dumps or GPS tracks by default.
-- Existing full CI gates remain required: tests, typecheck, production build, runtime smoke, native SQLite smoke, Docker compatibility build.
+- Full CI remains mandatory: tests, typecheck, build, runtime smoke, native SQLite smoke, Docker build.
 
 ## Review Focus
 
-1. **Floating-point nutrition artifacts:** values such as `120.600000000001` must render as `120,6`, while `53.0` renders as `53`; add formatter tests in Task 1.
-2. **Provider/user step-goal precedence:** Garmin `stepsGoal=0`, missing/invalid provider goal, and missing profile must resolve safely to profile/default `7500`; add read-model tests in Task 2.
-3. **Date-of-birth edge cases:** birthday today, tomorrow, leap-day birth date, and future DOB must not yield an invalid BMR; add energy/profile tests in Task 3.
-4. **Coach tool ambiguity/idempotency:** two nutrition entries with the same title and explicit destructive user wording must not cause a guessed deletion; add tool-resolution tests in Task 6.
-5. **Partial DeepSeek/tool failures:** if one tool call succeeds and the provider fails afterward, persisted actions must remain auditable and the API must report completed actions without pretending the whole turn was rolled back; add route/provider failure tests in Task 7.
+1. **Floating-point nutrition artifacts:** `120.600000000001` renders as `120,6`, while `53.0` renders as `53`.
+2. **Step-goal precedence:** provider goal wins; invalid/zero provider goal falls to profile; missing profile falls to `7500`.
+3. **DOB edges:** birthday today/tomorrow, leap-day DOB and future DOB produce correct validation/age behavior.
+4. **Coach ambiguity:** duplicate matching nutrition entries must not be guessed for destructive mutations.
+5. **Partial Coach failure:** completed tool writes remain auditable and are reported if the model/provider fails afterward.
 
 ---
 
-## File Structure
+## File Map
 
-### Backend additions
+**Backend create:**
+- `apps/api/src/profile/repository.ts`
+- `apps/api/src/profile/routes.ts`
+- `apps/api/src/profile/energy.ts`
+- `apps/api/src/coach/repository.ts`
+- `apps/api/src/coach/system-prompt.ts`
+- `apps/api/src/coach/context.ts`
+- `apps/api/src/coach/deepseek.ts`
+- `apps/api/src/coach/tools.ts`
+- `apps/api/src/coach/routes.ts`
+- `apps/api/src/today/step-goal.ts`
 
-- `apps/api/src/profile/repository.ts` — single-user profile contract.
-- `apps/api/src/profile/routes.ts` — profile GET/PATCH API.
-- `apps/api/src/profile/energy.ts` — age, BMR, TDEE calculations and provenance.
-- `apps/api/src/coach/system-prompt.ts` — canonical Polish Coach prompt.
-- `apps/api/src/coach/context.ts` — normalized bounded model context builder.
-- `apps/api/src/coach/repository.ts` — conversation/message persistence interfaces.
-- `apps/api/src/coach/deepseek.ts` — provider client abstraction and HTTP implementation.
-- `apps/api/src/coach/tools.ts` — allow-listed tool schemas/execution boundary.
-- `apps/api/src/coach/routes.ts` — chat/conversation HTTP API.
+**Backend modify:**
+- `database/prisma/schema.prisma`
+- `apps/api/src/persistence/prisma-repositories.ts`
+- `apps/api/src/app.ts`
+- `apps/api/src/runtime.ts`
+- `apps/api/src/server.ts`
+- `apps/api/src/config.ts`
+- `apps/api/src/nutrition/routes.ts`
+- `apps/api/src/nutrition/repository.ts`
+- `apps/api/src/health/repository.ts`
+- `apps/api/src/health/routes.ts`
+- `apps/api/src/plans/routes.ts`
+- `apps/api/src/today/routes.ts`
+- `apps/api/src/openapi.ts`
+- `packages/activity-model/src/plan-item.ts`
 
-### Backend modifications
+**Frontend create:**
+- `apps/web/src/NutritionEntryDialog.tsx`
+- `apps/web/src/activity-presets.ts`
+- `apps/web/src/ProfileSettings.tsx`
+- `apps/web/src/CoachView.tsx`
+- `apps/web/src/format-number.ts`
 
-- `database/prisma/schema.prisma` — profile, extra DailyHealth fields, Coach conversation/message fields.
-- `apps/api/src/persistence/prisma-repositories.ts` — persistence implementations for profile, new health fields, Coach conversations/messages.
-- `apps/api/src/app.ts`, `apps/api/src/runtime.ts`, `apps/api/src/server.ts`, `apps/api/src/config.ts` — wire profile/Coach dependencies and DeepSeek config.
-- `apps/api/src/nutrition/routes.ts` — optional create metadata + PATCH/DELETE.
-- `apps/api/src/health/repository.ts`, `apps/api/src/health/routes.ts` — richer Garmin metrics.
-- `apps/api/src/today/routes.ts` — step-goal/energy read model.
-- `apps/api/src/openapi.ts` — new/changed contracts.
-- `packages/activity-model/src/*` as needed — permit manually completed activity-link workouts while preserving later Garmin attachment.
-
-### Frontend additions
-
-- `apps/web/src/NutritionEntryDialog.tsx` — edit nutrition entry.
-- `apps/web/src/activity-presets.ts` — quick-add preset definitions/builders.
-- `apps/web/src/ProfileSettings.tsx` — profile/BMR/TDEE settings editor.
-- `apps/web/src/CoachView.tsx` — dedicated chat view.
-- `apps/web/src/format-number.ts` — Polish compact numeric formatting.
-
-### Frontend modifications
-
-- `apps/web/src/App.tsx` — Today Activity/Nutrition/metric strip and Coach navigation rendering.
-- `apps/web/src/api.ts` — nutrition/profile/Coach endpoints.
-- `apps/web/src/types.ts` — new Today/profile/nutrition/Coach types.
-- `apps/web/src/SettingsView.tsx` — Health Profile section.
-- `apps/web/src/features.css`, `apps/web/src/insights.css` — quick-add/editor/chat styles.
+**Frontend modify:**
+- `apps/web/src/App.tsx`
+- `apps/web/src/api.ts`
+- `apps/web/src/types.ts`
+- `apps/web/src/SettingsView.tsx`
+- `apps/web/src/features.css`
+- `apps/web/src/insights.css`
 
 ---
 
-### Task 1: Nutrition CRUD and compact presentation
+### Task 1: Nutrition CRUD, rounded macros and simplified UI
 
 **Files:**
 - Modify: `apps/api/src/nutrition/routes.ts`
 - Modify: `apps/api/src/nutrition/repository.ts`
 - Modify: `apps/api/src/persistence/prisma-repositories.ts`
 - Modify: `apps/api/src/openapi.ts`
+- Test: `apps/api/test/nutrition-api.test.ts`
+- Create: `apps/web/src/NutritionEntryDialog.tsx`
+- Create: `apps/web/src/format-number.ts`
+- Create/Test: `apps/web/src/format-number.test.ts`
 - Modify: `apps/web/src/api.ts`
 - Modify: `apps/web/src/types.ts`
 - Modify: `apps/web/src/App.tsx`
-- Create: `apps/web/src/NutritionEntryDialog.tsx`
-- Create: `apps/web/src/format-number.ts`
-- Test: `apps/api/test/nutrition-api.test.ts`
-- Create/Test: `apps/web/src/format-number.test.ts`
+- Modify: `apps/web/src/features.css`
 
-**Interfaces:**
-- Produces: `PATCH /api/v1/nutrition/:id`, `DELETE /api/v1/nutrition/:id`.
-- Produces: `formatMetric(value: number | null, maximumFractionDigits = 1): string`.
-- Produces: `QndHealthApi.updateNutrition(id, patch)` and `QndHealthApi.deleteNutrition(id)`.
+**Produces:**
+- `PATCH /api/v1/nutrition/:id`
+- `DELETE /api/v1/nutrition/:id`
+- `formatMetric(value: number | null, maximumFractionDigits?: number): string`
+- `QndHealthApi.updateNutrition()` / `deleteNutrition()`
 
-- [ ] **Step 1: Add failing backend CRUD/default tests**
-
-Add cases equivalent to:
+- [ ] **Step 1: Write failing nutrition CRUD/default tests**
 
 ```ts
-it('defaults missing consumedAt and mealType and allows later correction/deletion', async () => {
-  const created = await authorized.inject({
-    method: 'POST', url: '/api/v1/nutrition',
-    payload: { title: 'Owsianka', caloriesKcal: 420 },
-  });
-  expect(created.statusCode).toBe(201);
-  expect(created.json().mealType).toBe('other');
-  expect(Date.parse(created.json().consumedAt)).not.toBeNaN();
-
-  const id = created.json().id;
-  const edited = await authorized.inject({
-    method: 'PATCH', url: `/api/v1/nutrition/${id}`,
-    payload: { caloriesKcal: 390, proteinGrams: 31.2 },
-  });
-  expect(edited.statusCode).toBe(200);
-  expect(edited.json()).toMatchObject({ caloriesKcal: 390, proteinGrams: 31.2 });
-
-  expect((await authorized.inject({ method: 'DELETE', url: `/api/v1/nutrition/${id}` })).statusCode).toBe(204);
+const created = await authorized.inject({
+  method: 'POST', url: '/api/v1/nutrition',
+  payload: { title: 'Owsianka', caloriesKcal: 420 },
 });
+expect(created.statusCode).toBe(201);
+expect(created.json().mealType).toBe('other');
+expect(Number.isNaN(Date.parse(created.json().consumedAt))).toBe(false);
+
+const id = created.json().id;
+const edited = await authorized.inject({
+  method: 'PATCH', url: `/api/v1/nutrition/${id}`,
+  payload: { caloriesKcal: 390, proteinGrams: 31.2 },
+});
+expect(edited.statusCode).toBe(200);
+expect(edited.json()).toMatchObject({ caloriesKcal: 390, proteinGrams: 31.2 });
+expect((await authorized.inject({ method: 'DELETE', url: `/api/v1/nutrition/${id}` })).statusCode).toBe(204);
 ```
 
-Also assert unknown IDs return 404 and malformed/negative nutrients return 422.
+Also test unknown ID → 404 and negative/malformed metric → 422.
 
-- [ ] **Step 2: Run backend RED**
-
-Run:
+- [ ] **Step 2: Run RED**
 
 ```bash
 pnpm --filter @qnd-health/api test -- nutrition-api.test.ts
 ```
 
-Expected: failures for optional create metadata and missing PATCH/DELETE routes.
+Expected: create-metadata/PATCH/DELETE failures.
 
-- [ ] **Step 3: Implement nutrition API changes**
+- [ ] **Step 3: Implement API defaults + PATCH/DELETE**
 
-Use schemas with optional metadata:
+Use optional create metadata:
 
 ```ts
 const createSchema = z.object({
@@ -154,11 +154,9 @@ const createSchema = z.object({
 });
 ```
 
-Default `consumedAt` on the server using the current instant; default `mealType='other'`. Add partial PATCH schema, route-level 404 handling, safe-write/audit actions `nutrition.update` and `nutrition.delete`, and OpenAPI schemas.
+Server supplies current timestamp and `other` when omitted. PATCH is partial. Both write routes use existing safe-write/idempotency/audit with actions `nutrition.update` / `nutrition.delete`.
 
-- [ ] **Step 4: Add failing frontend formatter/presentation tests**
-
-Create tests equivalent to:
+- [ ] **Step 4: Write frontend formatter tests**
 
 ```ts
 expect(formatMetric(120.600000000001)).toBe('120,6');
@@ -166,15 +164,11 @@ expect(formatMetric(53)).toBe('53');
 expect(formatMetric(null)).toBe('—');
 ```
 
-Add a render/helper assertion that nutrition macro presentation contains no `Dane kompletne`/`Brak części danych` caption.
+- [ ] **Step 5: Implement compact Nutrition UI**
 
-- [ ] **Step 5: Implement UI edit/delete and simplified list**
+Remove visible time, meal type and `Dane kompletne`/`Brak części danych`. Render title, kcal, B/W/T/błonnik with `formatMetric`. Add compact Edit/Delete actions; edit dialog exposes title, kcal, protein, carbs, fat, fiber, quantity, notes. Successful writes reload Today.
 
-Implement `NutritionEntryDialog` with title, kcal, B/W/T/błonnik, quantity and notes. In Today remove visible time, meal-type label and completeness captions; render macros through `formatMetric`. Wire compact Edit/Delete controls and reload Today after successful mutation.
-
-- [ ] **Step 6: Run Task 1 GREEN**
-
-Run:
+- [ ] **Step 6: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- nutrition-api.test.ts
@@ -182,9 +176,7 @@ pnpm --filter @qnd-health/web test -- format-number.test.ts
 pnpm typecheck
 ```
 
-Expected: all pass.
-
-- [ ] **Step 7: Commit Task 1**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/nutrition apps/api/src/persistence/prisma-repositories.ts apps/api/src/openapi.ts apps/api/test/nutrition-api.test.ts apps/web/src
@@ -193,101 +185,92 @@ git commit -m "feat: make nutrition editable"
 
 ---
 
-### Task 2: Permanent steps row and quick activity presets
+### Task 2: Permanent steps + Pompki/Wiszenie/Rower presets
 
 **Files:**
 - Modify: `database/prisma/schema.prisma`
 - Modify: `apps/api/src/health/repository.ts`
 - Modify: `apps/api/src/health/routes.ts`
+- Create: `apps/api/src/today/step-goal.ts`
 - Modify: `apps/api/src/today/routes.ts`
 - Modify: `apps/api/src/persistence/prisma-repositories.ts`
-- Modify: `packages/activity-model/src/plan-item.ts` or the existing progress implementation file discovered during execution
+- Modify: `packages/activity-model/src/plan-item.ts`
 - Modify: `apps/api/src/plans/routes.ts`
+- Test: `packages/activity-model/test/plan-item.test.ts`
+- Test: `apps/api/test/today-api.test.ts`
+- Test: `apps/api/test/garmin-ha-ingestion-api.test.ts`
 - Create: `apps/web/src/activity-presets.ts`
+- Create/Test: `apps/web/src/activity-presets.test.ts`
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/api.ts`
 - Modify: `apps/web/src/types.ts`
-- Test: `apps/api/test/today-api.test.ts`
-- Test: `apps/api/test/garmin-ha-ingestion-api.test.ts`
-- Test: `packages/activity-model/test/plan-item.test.ts`
-- Create/Test: `apps/web/src/activity-presets.test.ts`
+- Modify: `apps/web/src/features.css`
 
-**Interfaces:**
-- Produces: optional `DailyHealth.stepsGoal: number | null`.
-- Produces Today `activity.steps = { current, target, goalSource }`.
-- Produces: `activityPresets` configuration for `pushups`, `hang`, `stationary_bike`.
-- Extends progress semantics so an `activity_link` workout can be manually marked completed and still later accept an activity attachment.
+**Produces:**
+- optional `DailyHealth.stepsGoal`
+- Today `activity.steps = { current, target, goalSource }`
+- quick presets `pushups`, `hang`, `stationary_bike`
+- manual completion support for `activity_link` workouts while preserving later Garmin attachment
 
-- [ ] **Step 1: Write failing step-goal precedence tests**
-
-Cover:
+- [ ] **Step 1: Write failing step-goal resolver/read-model tests**
 
 ```ts
-expect(resolveTarget({ providerGoal: 9000, profileGoal: 8000 })).toEqual({ target: 9000, source: 'garmin' });
-expect(resolveTarget({ providerGoal: null, profileGoal: 8000 })).toEqual({ target: 8000, source: 'profile' });
-expect(resolveTarget({ providerGoal: 0, profileGoal: null })).toEqual({ target: 7500, source: 'fallback' });
+expect(resolveStepGoal(9000, 8000)).toEqual({ target: 9000, source: 'garmin' });
+expect(resolveStepGoal(null, 8000)).toEqual({ target: 8000, source: 'profile' });
+expect(resolveStepGoal(0, null)).toEqual({ target: 7500, source: 'fallback' });
 ```
 
-At route level assert Today always returns a steps model even with zero plans.
+Route test: Today returns a steps model even with no plan items.
 
-- [ ] **Step 2: Run RED for Today/ingestion**
+- [ ] **Step 2: Run RED**
 
 ```bash
 pnpm --filter @qnd-health/api test -- today-api.test.ts garmin-ha-ingestion-api.test.ts
 ```
 
-Expected: missing `stepsGoal` ingestion/read model failures.
-
-- [ ] **Step 3: Add `stepsGoal` schema/persistence/ingestion**
-
-Add `stepsGoal Float?` to `DailyHealth`, accept it in `PUT /api/v1/health/daily/:date`, map in Prisma repository, and return it in Today.
-
-Create a pure resolver in `apps/api/src/today/step-goal.ts`:
+- [ ] **Step 3: Add `stepsGoal` persistence/ingestion + resolver**
 
 ```ts
-export function resolveStepGoal(providerGoal: number | null | undefined, profileGoal: number | null | undefined) {
+export function resolveStepGoal(providerGoal?: number | null, profileGoal?: number | null) {
   if (providerGoal != null && providerGoal > 0) return { target: Math.round(providerGoal), source: 'garmin' as const };
   if (profileGoal != null && profileGoal > 0) return { target: Math.round(profileGoal), source: 'profile' as const };
   return { target: 7500, source: 'fallback' as const };
 }
 ```
 
-Until Task 3 profile wiring lands, pass `null` as profile goal; Task 3 replaces that with repository data.
+Task 2 uses `profileGoal=null`; Task 3 wires real profile data.
 
-- [ ] **Step 4: Write failing manual-completion-plus-link test for stationary bike**
-
-Pin the semantic requirement:
+- [ ] **Step 4: Write failing activity-link manual completion test**
 
 ```ts
-const manuallyDone = calculatePlanProgress({
+expect(calculatePlanProgress({
   strategy: 'activity_link', targetValue: null, currentValue: null,
   linkedActivityId: null, manualCompleted: true,
-});
-expect(manuallyDone.status).toBe('completed');
+}).status).toBe('completed');
 ```
 
-Also verify later adding `linkedActivityId` remains completed and does not create a second plan record.
+Also verify adding a `linkedActivityId` later remains completed and reuses the same plan record.
 
-- [ ] **Step 5: Implement compatible progress semantics**
+- [ ] **Step 5: Generalize progress semantics**
 
-Generalize `manualCompleted` handling so `activity_link` may be completed from explicit manual progress while still preferring a linked provider activity when present. Keep existing automatic candidate matching untouched.
+In `packages/activity-model/src/plan-item.ts`, honor explicit `manualCompleted` for `activity_link`, while linked provider activity still completes it naturally. Update plan-progress route validation so explicit manual completion of such workouts is accepted.
 
-- [ ] **Step 6: Add failing preset builder tests**
+- [ ] **Step 6: Write preset builder tests**
 
 ```ts
 expect(buildPresetPlan('pushups', '2026-09-21', 20)).toMatchObject({
   title: 'Pompki', kind: 'count_goal', completionStrategy: 'count_manual', targetValue: 20, unit: 'powt.'
 });
-expect(buildPresetPlan('hang', '2026-09-21', 45)).toMatchObject({ title: 'Wiszenie na drążku', targetValue: 45, unit: 's' });
+expect(buildPresetPlan('hang', '2026-09-21', 45)).toMatchObject({
+  title: 'Wiszenie na drążku', kind: 'count_goal', completionStrategy: 'count_manual', targetValue: 45, unit: 's'
+});
 expect(buildPresetPlan('stationary_bike', '2026-09-21', 30)).toMatchObject({
   title: 'Rower stacjonarny', kind: 'workout', completionStrategy: 'activity_link', activityType: 'indoor_cycling', plannedDurationSeconds: 1800
 });
 expect(() => buildPresetPlan('pushups', '2026-09-21', 0)).toThrow();
 ```
 
-- [ ] **Step 7: Implement preset UI**
-
-Define presets as data:
+- [ ] **Step 7: Implement quick-add controls**
 
 ```ts
 export const activityPresets = [
@@ -297,9 +280,9 @@ export const activityPresets = [
 ] as const;
 ```
 
-Render three compact input rows/cards in Activity below steps. On submit, create the normal plan item then immediately call `updateProgress` to mark the entered value completed; for stationary bike mark explicit completion while keeping attachment candidates enabled.
+Render directly under steps. Submit creates a normal plan item and immediately records entered completion. Stationary bike remains eligible for later Garmin candidate attachment.
 
-- [ ] **Step 8: Run Task 2 GREEN and schema smoke**
+- [ ] **Step 8: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/activity-model test
@@ -309,9 +292,7 @@ pnpm --filter @qnd-health/api prisma:generate
 pnpm typecheck
 ```
 
-Expected: all pass.
-
-- [ ] **Step 9: Commit Task 2**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add database/prisma/schema.prisma packages/activity-model apps/api/src apps/api/test apps/web/src
@@ -320,7 +301,7 @@ git commit -m "feat: add permanent steps and quick activities"
 
 ---
 
-### Task 3: Health Profile, BMR and TDEE
+### Task 3: Health Profile + Mifflin-St Jeor BMR/TDEE
 
 **Files:**
 - Modify: `database/prisma/schema.prisma`
@@ -340,15 +321,13 @@ git commit -m "feat: add permanent steps and quick activities"
 - Modify: `apps/web/src/types.ts`
 - Modify: `apps/web/src/App.tsx`
 
-**Interfaces:**
-- Produces `HealthProfileRecord { dateOfBirth, sexForBmr, heightCm, activityFactor, defaultStepsGoal }`.
-- Produces `calculateBmr(profile, weightKg, onDate)` and `calculateTdee(bmr, activityFactor)`.
-- Produces `GET /api/v1/profile`, `PATCH /api/v1/profile`.
-- Extends Today with `energy: { bmrKcal, tdeeKcal, source: 'mifflin_st_jeor', activityFactor } | null`.
+**Produces:**
+- `HealthProfileRecord`
+- `GET /api/v1/profile`, `PATCH /api/v1/profile`
+- `calculateAge()`, `calculateBmr()`, `calculateTdee()`
+- Today `energy` model and profile-backed step target
 
-- [ ] **Step 1: Write failing energy formula/profile tests**
-
-Include male/female formula fixtures and date edges:
+- [ ] **Step 1: Write failing formula/date tests**
 
 ```ts
 expect(calculateAge('1990-09-21', '2026-09-21')).toBe(36);
@@ -357,7 +336,7 @@ expect(() => calculateAge('2030-01-01', '2026-09-21')).toThrow();
 expect(calculateTdee(2000, 1.2)).toBe(2400);
 ```
 
-For a leap-day DOB, define age by normal calendar anniversary semantics and assert a finite non-negative age.
+Add male/female Mifflin-St Jeor fixtures and leap-day DOB case.
 
 - [ ] **Step 2: Run RED**
 
@@ -365,11 +344,7 @@ For a leap-day DOB, define age by normal calendar anniversary semantics and asse
 pnpm --filter @qnd-health/api test -- profile-energy.test.ts
 ```
 
-Expected: module/functions/routes missing.
-
-- [ ] **Step 3: Add Prisma profile model and repository**
-
-Use a single-row shape with fixed ID:
+- [ ] **Step 3: Add single-user profile model/repository**
 
 ```prisma
 model HealthProfile {
@@ -384,11 +359,9 @@ model HealthProfile {
 }
 ```
 
-Repository exposes `get(): Promise<HealthProfileRecord | null>` and `upsert(patch): Promise<HealthProfileRecord>`.
+Repository: `get()` and `upsert(patch)`.
 
-- [ ] **Step 4: Implement validated profile routes and pure energy helpers**
-
-PATCH validation:
+- [ ] **Step 4: Implement validated profile API**
 
 ```ts
 const profilePatchSchema = z.object({
@@ -400,17 +373,17 @@ const profilePatchSchema = z.object({
 });
 ```
 
-Reject future DOB with 422. Audit updates as `profile.update`.
+Future DOB → 422. Audit as `profile.update`.
 
-- [ ] **Step 5: Wire profile into Today step-goal and energy**
+- [ ] **Step 5: Compose energy into Today**
 
-Fetch profile in Today composition. Resolve target order provider → profile → 7500. Compute energy only when profile fields and latest weight exist; otherwise `energy=null`. Replace Body Battery in the default top strip with TDEE, label `szacowane`, keep Body Battery stored elsewhere.
+Use latest weight + complete profile only. Return `energy=null` otherwise. When available return `{ bmrKcal, tdeeKcal, source: 'mifflin_st_jeor', activityFactor }`. Replace default Body Battery top card with TDEE labeled `szacowane`. Body Battery remains stored for History/Progress/customization.
 
-- [ ] **Step 6: Add Settings editor**
+- [ ] **Step 6: Add Settings profile editor**
 
-`ProfileSettings` loads/saves DOB, BMR sex basis, height, activity factor, default step goal. Explain activity factor and show computed BMR/TDEE preview only when inputs are sufficient.
+Fields: DOB, sex-for-BMR, height, activity factor, default steps. Show explanatory text and computed preview only when sufficient inputs exist.
 
-- [ ] **Step 7: Run Task 3 GREEN**
+- [ ] **Step 7: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- profile-energy.test.ts today-api.test.ts
@@ -419,9 +392,7 @@ pnpm typecheck
 pnpm build
 ```
 
-Expected: pass.
-
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add database/prisma/schema.prisma apps/api/src/profile apps/api/src/persistence apps/api/src/app.ts apps/api/src/runtime.ts apps/api/src/today apps/api/src/openapi.ts apps/api/test apps/web/src
@@ -430,7 +401,7 @@ git commit -m "feat: add health profile and energy estimates"
 
 ---
 
-### Task 4: Richer Garmin/Home Assistant metrics
+### Task 4: Rich Garmin/Home Assistant daily metrics
 
 **Files:**
 - Modify: `database/prisma/schema.prisma`
@@ -441,11 +412,9 @@ git commit -m "feat: add health profile and energy estimates"
 - Modify/Test: `apps/api/test/garmin-ha-ingestion-api.test.ts`
 - Modify: `apps/web/src/types.ts`
 
-**Interfaces:**
-- Produces normalized DailyHealth fields: `floorsDescended`, `vo2Max`, `providerBmrKcal`, plus existing `stepsGoal`.
-- Preserves less mature provider values in `readinessMetricsJson`/`rawProviderDataJson` instead of inventing unrelated columns.
+**Produces:** `floorsDescended`, `vo2Max`, `providerBmrKcal`, `stepsGoal`; provider-specific readiness/recovery may remain structured JSON.
 
-- [ ] **Step 1: Add failing ingestion tests**
+- [ ] **Step 1: Write failing ingestion test**
 
 ```ts
 const response = await putDaily({
@@ -464,13 +433,11 @@ expect(response.json()).toMatchObject({ stepsGoal: 9000, floorsDescended: 3.58, 
 pnpm --filter @qnd-health/api test -- garmin-ha-ingestion-api.test.ts
 ```
 
-Expected: new fields rejected/ignored.
+- [ ] **Step 3: Implement schema/repository/route fields**
 
-- [ ] **Step 3: Add schema/repository/route fields**
+Add nullable finite non-negative fields. Preserve Garmin/Home Assistant provenance. Keep readiness/training status/recovery values in existing structured JSON where no cross-app normalized field is needed.
 
-Add nullable floats to Prisma and typed repository contracts. Extend health payload Zod schema with non-negative finite numbers. Continue preserving `source=garmin`, `transport=home_assistant`.
-
-- [ ] **Step 4: Run Task 4 GREEN**
+- [ ] **Step 4: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- garmin-ha-ingestion-api.test.ts
@@ -478,9 +445,7 @@ pnpm --filter @qnd-health/api prisma:generate
 pnpm typecheck
 ```
 
-Expected: pass.
-
-- [ ] **Step 5: Commit Task 4**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add database/prisma/schema.prisma apps/api/src/health apps/api/src/persistence/prisma-repositories.ts apps/api/src/openapi.ts apps/api/test/garmin-ha-ingestion-api.test.ts apps/web/src/types.ts
@@ -489,7 +454,7 @@ git commit -m "feat: ingest richer garmin metrics"
 
 ---
 
-### Task 5: Coach persistence, context builder and canonical prompt
+### Task 5: Coach persistence, normalized context and canonical prompt
 
 **Files:**
 - Modify: `database/prisma/schema.prisma`
@@ -500,25 +465,20 @@ git commit -m "feat: ingest richer garmin metrics"
 - Create/Test: `apps/api/test/coach-context.test.ts`
 - Create/Test: `apps/api/test/coach-prompt.test.ts`
 
-**Interfaces:**
-- Produces `COACH_SYSTEM_PROMPT: string`.
-- Produces `buildCoachContext(deps, conversationId, localDate): Promise<CoachContext>`.
-- Produces conversation/message repository operations `createConversation`, `listConversations`, `listMessages`, `appendMessage`.
+**Produces:** `COACH_SYSTEM_PROMPT`, `buildCoachContext()`, persisted conversations/messages.
 
-- [ ] **Step 1: Write failing prompt policy tests**
-
-Assert prompt includes semantic anchors, not exact snapshot:
+- [ ] **Step 1: Write prompt policy tests**
 
 ```ts
 expect(COACH_SYSTEM_PROMPT).toContain('surowo, ale sprawiedliwie');
 expect(COACH_SYSTEM_PROMPT).toContain('Brak danych oznacza brak danych');
-expect(COACH_SYSTEM_PROMPT).toContain('wykonaj je bez dodatkowego potwierdzenia');
+expect(COACH_SYSTEM_PROMPT).toContain('bez dodatkowego potwierdzenia');
 expect(COACH_SYSTEM_PROMPT).toContain('Nie diagnozuj');
 ```
 
-- [ ] **Step 2: Write failing context privacy tests**
+- [ ] **Step 2: Write privacy/context RED tests**
 
-Seed health with `rawProviderDataJson` containing GPS/provider secrets and assert context contains normalized values but serialized context does not contain keys/coordinates/raw payload strings.
+Seed `rawProviderDataJson` with fake GPS/secret strings. Assert normalized context includes allowed health values but serialized context does not contain raw payload, coordinates, tokens or headers.
 
 - [ ] **Step 3: Run RED**
 
@@ -526,11 +486,7 @@ Seed health with `rawProviderDataJson` containing GPS/provider secrets and asser
 pnpm --filter @qnd-health/api test -- coach-prompt.test.ts coach-context.test.ts
 ```
 
-Expected: modules missing.
-
-- [ ] **Step 4: Add conversation/message Prisma models**
-
-Use focused persistence:
+- [ ] **Step 4: Add conversation/message models**
 
 ```prisma
 model CoachConversation {
@@ -540,7 +496,6 @@ model CoachConversation {
   updatedAt DateTime       @updatedAt
   messages  CoachMessage[]
 }
-
 model CoachMessage {
   id             String   @id @default(uuid())
   conversationId String
@@ -554,11 +509,11 @@ model CoachMessage {
 }
 ```
 
-- [ ] **Step 5: Implement canonical prompt and normalized context**
+- [ ] **Step 5: Implement prompt + bounded context builder**
 
-Copy the approved prompt intent from the spec into one server source file. Context builder returns only bounded fields such as current profile/steps/energy, Today summary, 7/30-day progress, recent plans/activities/nutrition/weight trends. Explicitly omit `rawProviderDataJson`, GPS and credentials.
+Use approved system prompt from spec. Context includes profile, Today, steps, plans, recent activities/nutrition, recent weight/sleep/RHR/HRV, BMR/TDEE, 7/30-day progress. Explicitly omit raw provider payloads/GPS/credentials.
 
-- [ ] **Step 6: Run Task 5 GREEN**
+- [ ] **Step 6: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- coach-prompt.test.ts coach-context.test.ts
@@ -566,18 +521,16 @@ pnpm --filter @qnd-health/api prisma:generate
 pnpm typecheck
 ```
 
-Expected: pass.
-
-- [ ] **Step 7: Commit Task 5**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add database/prisma/schema.prisma apps/api/src/coach apps/api/src/persistence/prisma-repositories.ts apps/api/test/coach-*.test.ts
+git add database/prisma/schema.prisma apps/api/src/coach apps/api/src/persistence/prisma-repositories.ts apps/api/test/coach-context.test.ts apps/api/test/coach-prompt.test.ts
 git commit -m "feat: add coach context and persistence"
 ```
 
 ---
 
-### Task 6: DeepSeek client and allow-listed Coach tools
+### Task 6: DeepSeek client + allow-listed Coach tools
 
 **Files:**
 - Modify: `apps/api/src/config.ts`
@@ -585,29 +538,24 @@ git commit -m "feat: add coach context and persistence"
 - Modify: `apps/api/src/runtime.ts`
 - Create: `apps/api/src/coach/deepseek.ts`
 - Create: `apps/api/src/coach/tools.ts`
-- Create/Test: `apps/api/test/coach-tools.test.ts`
 - Create/Test: `apps/api/test/deepseek-client.test.ts`
-- Modify: `.env.example` or the active generic env example in the branch
+- Create/Test: `apps/api/test/coach-tools.test.ts`
+- Modify: `.env.example`
 
-**Interfaces:**
-- Produces config: `deepseekApiKey?: string`, `deepseekModel: string`, `deepseekBaseUrl: string`.
-- Produces `DeepSeekClient.completeTurn(input): Promise<DeepSeekTurn>`.
-- Produces `coachTools: ToolDefinition[]` and `executeCoachTool(name, args, actor): Promise<ToolResult>`.
+**Produces:** `DeepSeekClient.completeTurn()`, `coachTools`, `executeCoachTool()`, DeepSeek config with default model `deepseek-chat`.
 
-- [ ] **Step 1: Add failing config/provider tests**
+- [ ] **Step 1: Write config/provider RED tests**
 
-Use a mocked fetch to verify request goes to configured base URL with server-side key and model, and no key is exposed in returned/loggable payloads. Missing key must yield a typed `CoachProviderUnavailableError`.
+Mock fetch and assert configured base URL/key/model are used server-side, API key never appears in returned errors, and missing key yields typed provider-unavailable error.
 
-- [ ] **Step 2: Add failing allow-list/ambiguity tests**
-
-Pin these behaviors:
+- [ ] **Step 2: Write allow-list/ambiguity RED tests**
 
 ```ts
 await expect(executeCoachTool('shell', {}, actor)).rejects.toMatchObject({ code: 'unknown_tool' });
 await expect(executeCoachTool('delete_nutrition', { title: 'WPC' }, actor)).resolves.toMatchObject({ needsClarification: true });
 ```
 
-Seed two `WPC` entries so deletion by non-unique title cannot guess. Deletion by exact ID from an explicit user command succeeds and audits actor=`coach`.
+Seed two `WPC` entries. Exact record ID from explicit user instruction may delete and must create Coach audit metadata.
 
 - [ ] **Step 3: Run RED**
 
@@ -615,11 +563,7 @@ Seed two `WPC` entries so deletion by non-unique title cannot guess. Deletion by
 pnpm --filter @qnd-health/api test -- deepseek-client.test.ts coach-tools.test.ts
 ```
 
-Expected: missing modules/config.
-
 - [ ] **Step 4: Implement DeepSeek HTTP client**
-
-Use the OpenAI-compatible chat-completions shape with configurable defaults:
 
 ```ts
 const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -630,13 +574,11 @@ const response = await fetch(`${baseUrl}/chat/completions`, {
 });
 ```
 
-Never include key in thrown errors. Use a finite timeout with `AbortController`.
+Use finite timeout with `AbortController`; redact key from errors. Defaults: `DEEPSEEK_BASE_URL=https://api.deepseek.com`, `DEEPSEEK_MODEL=deepseek-chat`.
 
-- [ ] **Step 5: Implement tool registry over domain services**
+- [ ] **Step 5: Implement fixed tool registry**
 
-Allow exactly the spec tools: read Today/progress/history/plans/activities/nutrition/profile and write plan/progress/activity/nutrition/measurement/profile/step goal. Validate every tool payload with Zod before calling repositories/services. No tool accepts arbitrary URL/path/SQL.
-
-For explicit mutation actor context use:
+Read tools: today/progress/history/plans/activities/nutrition/profile. Write tools: plans/progress/activity/nutrition/measurement/profile/step goal. Every payload validated with Zod. No arbitrary paths/URLs/SQL.
 
 ```ts
 interface CoachActorContext {
@@ -647,16 +589,14 @@ interface CoachActorContext {
 }
 ```
 
-- [ ] **Step 6: Run Task 6 GREEN**
+- [ ] **Step 6: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- deepseek-client.test.ts coach-tools.test.ts
 pnpm typecheck
 ```
 
-Expected: pass.
-
-- [ ] **Step 7: Commit Task 6**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/config.ts apps/api/src/server.ts apps/api/src/runtime.ts apps/api/src/coach apps/api/test .env.example
@@ -665,7 +605,7 @@ git commit -m "feat: add deepseek coach tools"
 
 ---
 
-### Task 7: Coach chat API and Polish chat UI
+### Task 7: Coach conversation API + chat UI
 
 **Files:**
 - Create: `apps/api/src/coach/routes.ts`
@@ -674,65 +614,51 @@ git commit -m "feat: add deepseek coach tools"
 - Modify: `apps/api/src/openapi.ts`
 - Create/Test: `apps/api/test/coach-api.test.ts`
 - Create: `apps/web/src/CoachView.tsx`
+- Create/Test: `apps/web/src/coach-view.test.ts`
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/api.ts`
 - Modify: `apps/web/src/types.ts`
 - Modify: `apps/web/src/insights.css`
-- Create/Test: `apps/web/src/coach-view.test.ts`
 
-**Interfaces:**
-- Produces `GET/POST /api/v1/coach/conversations`.
-- Produces `GET/POST /api/v1/coach/conversations/:id/messages`.
-- Message response: `{ message, actions: Array<{ tool, entityType?, entityId?, summary }> }`.
+**Produces:**
+- `GET/POST /api/v1/coach/conversations`
+- `GET/POST /api/v1/coach/conversations/:id/messages`
+- turn response `{ message, actions }`
 
-- [ ] **Step 1: Write failing API conversation/turn tests**
+- [ ] **Step 1: Write API turn tests**
 
-Test create/list conversation, persisted user/assistant messages, one mocked tool-call round-trip, and explicit action summary.
+Test persisted user/assistant messages, a mocked tool-call round trip and action summary. Add partial failure case where one mutation succeeded before provider failure; assert audit remains and response error contains `completedActions`.
 
-Also test partial failure:
-
-```ts
-expect(result.statusCode).toBe(502);
-expect(await audit.list()).toContainEqual(expect.objectContaining({ action: 'nutrition.update' }));
-expect(result.json().error.details.completedActions).toHaveLength(1);
-```
-
-This pins that completed writes remain truthful/auditable if DeepSeek fails after a tool call.
-
-- [ ] **Step 2: Run backend RED**
+- [ ] **Step 2: Run RED**
 
 ```bash
 pnpm --filter @qnd-health/api test -- coach-api.test.ts
 ```
 
-Expected: missing routes.
-
 - [ ] **Step 3: Implement Coach turn loop**
-
-Sequence:
 
 ```text
 persist user message
-→ build normalized context + system prompt
-→ call DeepSeek
-→ if tool calls: validate/execute allow-listed tools, collect action summaries
-→ append tool results to model messages
-→ call DeepSeek for final assistant text
-→ persist assistant message + sanitized tool metadata
-→ return assistant message + actions
+→ build context + system prompt
+→ DeepSeek call
+→ validate/execute allow-listed tool calls
+→ append tool results
+→ DeepSeek final call
+→ persist assistant response + sanitized tool metadata
+→ return message + action summaries
 ```
 
-Limit tool rounds (for example max 6) to prevent loops; exceeding the limit returns a controlled provider/tool error.
+Set exact maximum tool rounds to `6`; round 7 returns controlled error.
 
-- [ ] **Step 4: Add failing frontend chat tests**
+- [ ] **Step 4: Write frontend RED tests**
 
-Assert messages render, send is disabled for blank input, performed actions render as concise callouts, and provider errors do not erase existing conversation.
+Blank send disabled; existing conversation remains on provider error; tool actions render concise callouts; successful assistant response persists after reload.
 
-- [ ] **Step 5: Implement `CoachView` and Today Coach link**
+- [ ] **Step 5: Implement `CoachView`**
 
-Use existing `Coach` nav item for full view. Keep UI consistent with cockpit style rather than generic oversized bubbles. Today compact widget links into Coach and may show a short latest assessment if available; it must not fabricate one when none exists.
+Use existing Coach nav. Keep calm cockpit visual language, readable rows rather than oversized generic chat bubbles. Today Coach widget links to full chat and never fabricates an assessment when none is persisted.
 
-- [ ] **Step 6: Run Task 7 GREEN**
+- [ ] **Step 6: Verify GREEN**
 
 ```bash
 pnpm --filter @qnd-health/api test -- coach-api.test.ts
@@ -741,9 +667,7 @@ pnpm typecheck
 pnpm build
 ```
 
-Expected: pass.
-
-- [ ] **Step 7: Commit Task 7**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/coach apps/api/src/app.ts apps/api/src/runtime.ts apps/api/src/openapi.ts apps/api/test/coach-api.test.ts apps/web/src
@@ -752,23 +676,19 @@ git commit -m "feat: add deepseek coach chat"
 
 ---
 
-### Task 8: OpenAPI, Hermes correction flow, migration/deployment verification
+### Task 8: OpenAPI, Hermes correction flow and deployment verification
 
 **Files:**
 - Modify: `apps/api/src/openapi.ts`
-- Modify: `README.md`
-- Modify: `docs/DEPLOYMENT.md` if present on branch; otherwise update the existing deployment document named by the repository
-- Modify: `.env.example` or current generic env example
 - Modify/Test: `apps/api/test/openapi.test.ts`
 - Modify/Test: `apps/api/test/native-config.test.ts`
+- Modify: `README.md`
+- Modify: `docs/DEPLOYMENT.md`
+- Modify: `.env.example`
 
-**Interfaces:**
-- Final public contracts discoverable from `GET /api/openapi.json`.
-- Deployment requires schema push because profile/Coach/health columns add SQLite schema.
+**Produces:** final discoverable contracts and Debian LXC deployment instructions.
 
-- [ ] **Step 1: Add failing OpenAPI coverage assertions**
-
-Assert paths exist:
+- [ ] **Step 1: Add OpenAPI assertions**
 
 ```ts
 expect(doc.paths['/api/v1/nutrition/{id}'].patch).toBeDefined();
@@ -778,31 +698,29 @@ expect(doc.paths['/api/v1/profile'].patch).toBeDefined();
 expect(doc.paths['/api/v1/coach/conversations/{id}/messages'].post).toBeDefined();
 ```
 
-Assert nutrition create does not require `consumedAt`/`mealType` and health daily schema advertises the new Garmin fields.
+Assert nutrition create does not require `consumedAt`/`mealType`; health schema advertises new Garmin metrics.
 
-- [ ] **Step 2: Run OpenAPI RED if any contract is still missing**
+- [ ] **Step 2: Run OpenAPI tests**
 
 ```bash
 pnpm --filter @qnd-health/api test -- openapi.test.ts
 ```
 
-Expected before final docs completion: any omitted contract fails.
+Fix any missing contract until GREEN.
 
-- [ ] **Step 3: Complete OpenAPI and deployment docs**
+- [ ] **Step 3: Document DeepSeek and LXC deployment**
 
-Document server env keys without values:
+Add to `.env.example`:
 
 ```env
 DEEPSEEK_API_KEY=
-DEEPSEEK_MODEL=<chosen deployment model>
+DEEPSEEK_MODEL=deepseek-chat
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
-Document LXC update order including backup + `prisma:push`, then service restart. Explain Hermes can now PATCH/DELETE nutrition and should stop treating corrections as impossible.
+Update `docs/DEPLOYMENT.md` with DB backup → `prisma:generate` → `prisma:push` → build → service restart. Update README/OpenAPI notes so Hermes knows nutrition corrections are now PATCH/DELETE operations.
 
 - [ ] **Step 4: Run full verification**
-
-Run exactly:
 
 ```bash
 pnpm --filter @qnd-health/api prisma:generate
@@ -814,36 +732,34 @@ pnpm smoke:native
 docker build -t qnd-health-ci .
 ```
 
-Expected: every command exits 0.
+Every command must exit 0.
 
-- [ ] **Step 5: Manual acceptance checklist against production-like runtime**
-
-Using a temporary/local SQLite database and test token, verify:
+- [ ] **Step 5: Run acceptance checklist against production-like temporary DB**
 
 ```text
-1. Today shows Kroki even with no plan rows.
-2. Provider step target wins; otherwise profile target; otherwise 7500.
-3. Pompki accepts repetitions and records completion.
-4. Wiszenie accepts seconds and records completion.
-5. Rower accepts minutes, records manual completion, and later permits Garmin attachment.
-6. Nutrition displays no time/type/completeness captions.
-7. Nutrition macros are rounded human-readably.
-8. Nutrition edit/delete works from UI and API.
-9. Settings profile computes BMR/TDEE and Today shows TDEE instead of Body Battery.
-10. Garmin VO2max/BMR/floors-down ingestion persists.
-11. Coach answers in Polish using normalized context.
-12. Explicit Coach command changes data immediately and reports action.
-13. Ambiguous/destructive target with multiple matches asks rather than guesses.
-14. No DeepSeek key/raw Garmin dump/GPS is returned to browser or stored in tool metadata.
+1. Kroki always visible with provider/profile/7500 precedence.
+2. Pompki records repetitions and completes.
+3. Wiszenie records seconds and completes.
+4. Rower records minutes, can complete manually, and later accept Garmin attachment.
+5. Nutrition has no visible time/type/completeness captions.
+6. Nutrition values have human precision.
+7. Nutrition edit/delete works in UI and API.
+8. Profile computes BMR/TDEE; top strip shows TDEE instead of Body Battery.
+9. VO2max/provider BMR/floors-down persist from Garmin/HA ingestion.
+10. Coach answers in Polish from normalized context.
+11. Explicit unambiguous Coach mutation executes immediately and reports it.
+12. Ambiguous destructive target asks instead of guessing.
+13. No DeepSeek key/raw Garmin payload/GPS leaks to browser or tool metadata.
+14. Partial provider failure truthfully reports already-completed actions.
 ```
 
-- [ ] **Step 6: Update draft PR description and commit final docs/tests**
+- [ ] **Step 6: Commit docs/contracts**
 
 ```bash
-git add apps/api/src/openapi.ts apps/api/test README.md docs .env.example
+git add apps/api/src/openapi.ts apps/api/test/openapi.test.ts apps/api/test/native-config.test.ts README.md docs/DEPLOYMENT.md .env.example
 git commit -m "docs: finalize coach and health cockpit slice"
 ```
 
-- [ ] **Step 7: Verify branch CI from the final commit before deployment**
+- [ ] **Step 7: Verify final branch CI**
 
-Wait for the GitHub Actions CI associated with the final HEAD and confirm test/typecheck/build/runtime/native/Docker steps are all green. Do not give deployment instructions until this fresh run succeeds.
+Wait for GitHub Actions on final HEAD. Confirm tests, typecheck, build, runtime smoke, native SQLite smoke and Docker build are all green before giving LXC deployment commands.
