@@ -233,36 +233,24 @@ export function registerCoachRoutes(app: FastifyInstance, deps: CoachRouteDepend
     const parsed = messageBodySchema.safeParse(request.body);
     if (!parsed.success) return sendValidationError(reply, request, 'Message content is required', parsed.error.flatten());
 
-    await deps.coachRepository.addMessage({ conversationId: id, role: 'user', content: parsed.data.content });
-    const completedActions: CoachActionSummary[] = [];
+    const userMessage = await deps.coachRepository.addMessage({ conversationId: id, role: 'user', content: parsed.data.content });
     try {
-      const result = await runTurn({
-        ...deps,
-        deepseekClient: {
-          async completeTurn(input) {
-            try {
-              return await deps.deepseekClient!.completeTurn(input);
-            } catch (error) {
-              (error as Error & { completedActions?: CoachActionSummary[] }).completedActions = [...completedActions];
-              throw error;
-            }
-          },
-        },
-      }, id, request.id);
-      completedActions.push(...result.actions);
+      const result = await runTurn(deps, id, request.id);
       return reply.send(result);
     } catch (error) {
-      const toolMessages = await deps.coachRepository.listMessages(id);
+      const persistedMessages = await deps.coachRepository.listMessages(id);
+      const turnStartIndex = persistedMessages.findIndex(message => message.id === userMessage.id);
+      const toolMessages = (turnStartIndex >= 0 ? persistedMessages.slice(turnStartIndex + 1) : [])
+        .filter(message => message.role === 'tool');
       const actions = toolMessages
-        .filter(message => message.role === 'tool')
-        .map(message => message.toolMetadata)
-        .filter((metadata): metadata is Record<string, unknown> => Boolean(metadata && typeof metadata === 'object'))
-        .filter(metadata => typeof metadata.toolCallId === 'string' && typeof metadata.name === 'string')
-        .map(metadata => ({
-          toolCallId: String(metadata.toolCallId),
-          name: String(metadata.name),
+        .map(message => ({ message, metadata: message.toolMetadata }))
+        .filter((item): item is { message: typeof toolMessages[number]; metadata: Record<string, unknown> } => Boolean(item.metadata && typeof item.metadata === 'object'))
+        .filter(item => typeof item.metadata.toolCallId === 'string' && typeof item.metadata.name === 'string')
+        .map(item => ({
+          toolCallId: String(item.metadata.toolCallId),
+          name: String(item.metadata.name),
           status: 'completed' as const,
-          result: (() => { try { return JSON.parse(toolMessages.find(message => message.toolMetadata === metadata)?.content ?? 'null'); } catch { return null; } })(),
+          result: (() => { try { return JSON.parse(item.message.content); } catch { return null; } })(),
         }));
       request.log.warn({ err: error }, 'coach provider turn failed');
       return sendProviderError(reply, request, actions);
