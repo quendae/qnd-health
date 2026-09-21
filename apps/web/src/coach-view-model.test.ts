@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { coachActionLabel, visibleCoachMessages } from './coach-view-model';
-import type { CoachMessage } from './types';
+import { coachActionLabel, transientCoachActions, visibleCoachMessages } from './coach-view-model';
+import type { CoachAction, CoachMessage } from './types';
 
 describe('Coach chat view model', () => {
   it('hides technical tool and system messages from the conversation', () => {
@@ -22,5 +22,11 @@ describe('Coach chat view model', () => {
 
   it('falls back to a safe generic label for unknown actions', () => {
     expect(coachActionLabel({ toolCallId: 'x', name: 'future_tool', status: 'completed', result: {} })).toBe('Zmiana zapisana przez Coacha');
+  });
+
+  it('shows transient actions only for partial provider failures because successful actions are persisted with the assistant message', () => {
+    const actions: CoachAction[] = [{ toolCallId: 'a', name: 'set_default_step_goal', status: 'completed', result: { defaultStepsGoal: 8000 } }];
+    expect(transientCoachActions('success', actions)).toEqual([]);
+    expect(transientCoachActions('partial_error', actions)).toEqual(actions);
   });
 });
