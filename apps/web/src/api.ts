@@ -15,8 +15,23 @@ async function parseError(response: Response): Promise<string> {
   } catch {
     // fall through
   }
-  return `Request failed (${response.status})`;
+  return `Żądanie nie powiodło się (${response.status})`;
 }
+
+export interface PlanWriteInput {
+  date: string;
+  kind: PlanItem['kind'];
+  title: string;
+  completionStrategy: PlanItem['completionStrategy'];
+  metricKey?: string | null;
+  targetValue?: number | null;
+  unit?: string | null;
+  activityType?: string | null;
+  plannedDurationSeconds?: number | null;
+  plannedDistanceMeters?: number | null;
+}
+
+export type PlanPatchInput = Partial<PlanWriteInput>;
 
 export class QndHealthApi {
   constructor(private readonly token: string) {}
@@ -30,11 +45,28 @@ export class QndHealthApi {
     }
     const response = await fetch(path, { ...init, headers });
     if (!response.ok) throw new ApiError(await parseError(response), response.status);
+    if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }
 
   getToday(date: string) {
     return this.request<TodayResponse>(`/api/v1/today?date=${encodeURIComponent(date)}`);
+  }
+
+  listPlans(from: string, to: string) {
+    return this.request<{ items: PlanItem[] }>(`/api/v1/plans?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  }
+
+  createPlan(input: PlanWriteInput) {
+    return this.request<PlanItem>('/api/v1/plans', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  updatePlan(id: string, patch: PlanPatchInput) {
+    return this.request<PlanItem>(`/api/v1/plans/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
+  deletePlan(id: string) {
+    return this.request<void>(`/api/v1/plans/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   updateProgress(id: string, value: number) {
