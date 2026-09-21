@@ -7,6 +7,13 @@ export interface PlanProgress {
   status: PlanStatus;
 }
 
+export interface WorkoutStructure {
+  sets?: number | null;
+  repsPerSet?: number | null;
+  secondsPerSet?: number | null;
+  restSeconds?: number | null;
+}
+
 export interface CompletedActivity {
   id: string;
   provider: string;
@@ -37,6 +44,7 @@ export interface PlanItem {
   activityType?: string | null;
   plannedDurationSeconds?: number | null;
   plannedDistanceMeters?: number | null;
+  workoutStructure?: WorkoutStructure | null;
   linkedActivityId?: string | null;
   progress: PlanProgress;
   candidates?: ActivityCandidate[];
@@ -82,6 +90,7 @@ export interface HealthProfile {
   activityFactor: number;
   defaultStepsGoal: number;
   dailyCaloriesGoalKcal: number | null;
+  dailyProteinGoalGrams: number | null;
 }
 
 export interface EnergyEstimate {
@@ -122,7 +131,7 @@ export interface TodayResponse {
     steps: { current: number; target: number; goalSource: 'garmin' | 'profile' | 'fallback' };
     items: PlanItem[];
   };
-  nutrition: { entries: NutritionEntry[]; summary: NutritionSummary; goalKcal: number | null };
+  nutrition: { entries: NutritionEntry[]; summary: NutritionSummary; goalKcal: number | null; goalProteinGrams: number | null };
   weekToDate: { totalPlanItems: number; completed: number; partial: number; planned: number };
   remainingWeek: Omit<PlanItem, 'progress' | 'candidates'>[];
 }
@@ -152,6 +161,8 @@ export interface ProgressSeriesPoint {
   vo2Max: number | null;
   caloriesKcal: number | null;
   caloriesGoalKcal: number | null;
+  proteinGrams: number | null;
+  proteinGoalGrams: number | null;
   weightKg: number | null;
   activitiesCount: number;
   activityDurationSeconds: number;
