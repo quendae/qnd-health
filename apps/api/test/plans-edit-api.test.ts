@@ -13,7 +13,7 @@ class Plans implements PlanRepository {
 }
 
 const pepper = 'pepper';
-const raw = 'test-writer-token';
+const raw = 'qndh_test_writer';
 const hash = hashApiToken(raw, pepper);
 const auth = { authorization: `Bearer ${raw}` };
 const tokens = { async findByHash(value: string) { return value === hash ? { id: 'writer', tokenHash: hash, scopes: ['plans:read', 'plans:write'], revokedAt: null } : null; } };
@@ -21,7 +21,8 @@ const tokens = { async findByHash(value: string) { return value === hash ? { id:
 async function seededApp() {
   const plans = new Plans();
   const app = buildApp({ tokenPepper: pepper, tokenRepository: tokens, planRepository: plans });
-  await app.inject({ method: 'POST', url: '/api/v1/plans', headers: auth, payload: { date: '2026-09-21', kind: 'workout', title: 'Marsz', completionStrategy: 'activity_link', activityType: 'walking', plannedDurationSeconds: 1800 } });
+  const seeded = await app.inject({ method: 'POST', url: '/api/v1/plans', headers: auth, payload: { date: '2026-09-21', kind: 'workout', title: 'Marsz', completionStrategy: 'activity_link', activityType: 'walking', plannedDurationSeconds: 1800 } });
+  expect(seeded.statusCode).toBe(201);
   return { app, plans };
 }
 
