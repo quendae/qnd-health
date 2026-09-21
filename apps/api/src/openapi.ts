@@ -35,11 +35,46 @@ export const openApiDocument = {
           remainingWeek: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
       },
+      HistoryResponse: {
+        type: 'object', required: ['from', 'to', 'days'],
+        properties: {
+          from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' },
+          days: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        },
+      },
+      ProgressResponse: {
+        type: 'object', required: ['period', 'plan', 'activity', 'averages', 'weight', 'series'],
+        properties: {
+          period: { type: 'object', additionalProperties: true }, plan: { type: 'object', additionalProperties: true },
+          activity: { type: 'object', additionalProperties: true }, averages: { type: 'object', additionalProperties: true },
+          weight: { type: 'object', additionalProperties: true }, series: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        },
+      },
     },
   },
   security: [{ bearerAuth: [] }],
   paths: {
     '/api/v1/today': { get: { summary: 'Read the composed Today Hub model', security: [{ bearerAuth: [] }], responses: { '200': { description: 'Today Hub data', content: { 'application/json': { schema: { $ref: '#/components/schemas/TodayResponse' } } } } } } },
+    '/api/v1/history': {
+      get: {
+        summary: 'Read daily health, activity, plan and weight history', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { '200': { description: 'Daily history', content: { 'application/json': { schema: { $ref: '#/components/schemas/HistoryResponse' } } } }, '422': { description: 'Invalid date range' } },
+      },
+    },
+    '/api/v1/progress': {
+      get: {
+        summary: 'Read aggregate progress and trend series for a period', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { '200': { description: 'Progress aggregate and time series; missing measurements remain null', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProgressResponse' } } } }, '422': { description: 'Invalid date range' } },
+      },
+    },
     '/api/v1/activities': {
       get: {
         summary: 'List imported completed activities for a local calendar day', security: [{ bearerAuth: [] }],
