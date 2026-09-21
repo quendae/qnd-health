@@ -90,9 +90,9 @@ The fallback must not create a synthetic Garmin value.
 
 ### 4.3 Persistence
 
-Add a normalized optional daily metric for provider step goal, e.g. `stepsGoal` in `DailyHealth`.
+Add a normalized optional provider metric `stepsGoal` to `DailyHealth`.
 
-Add a user-settings record for defaults such as `defaultStepsGoal=7500`. The implementation may start with a single-user settings table because the deployment is currently single-user.
+The single-user Health Profile described below owns `defaultStepsGoal`, initialized to `7500` when the profile is first created. This avoids a second settings store for the same user-level defaults.
 
 Garmin/HA ingestion may update `stepsGoal` when Home Assistant exposes it.
 
@@ -175,7 +175,7 @@ Remove Body Battery from the default top health strip.
 
 Replace it with TDEE.
 
-Default metric strip becomes approximately:
+Default metric strip becomes:
 
 - weight,
 - resting heart rate,
@@ -185,29 +185,31 @@ Default metric strip becomes approximately:
 
 Body Battery is still retained in DailyHealth and can remain available in History/Progress or configurable widgets.
 
-### 6.2 Profile data required for BMR
+### 6.2 Health Profile
 
-Add a single-user Health Profile containing at minimum:
+Add one single-user `HealthProfile` record containing exactly these initial fields:
 
-- date of birth or age basis,
-- sex used by the BMR equation,
-- height in cm,
-- optional default activity factor,
-- default step goal.
+- `dateOfBirth` — ISO date,
+- `sexForBmr` — enum `male | female`, used only by the selected BMR equation,
+- `heightCm` — positive number,
+- `activityFactor` — positive number, default `1.2`, editable in Settings,
+- `defaultStepsGoal` — positive integer, default `7500`, editable in Settings.
 
 The profile is user-editable in Settings.
 
-No BMR calculation should be shown until the required profile fields and weight are available.
+No calculated BMR/TDEE is shown until `dateOfBirth`, `sexForBmr`, `heightCm` and a current weight are available.
+
+Age is calculated from `dateOfBirth` for the local calendar date; age is not stored separately.
 
 ### 6.3 BMR formula
 
 Use Mifflin-St Jeor as the default calculated BMR.
 
-For male physiology:
+For `sexForBmr=male`:
 
 `BMR = 10 × weightKg + 6.25 × heightCm - 5 × ageYears + 5`
 
-For female physiology:
+For `sexForBmr=female`:
 
 `BMR = 10 × weightKg + 6.25 × heightCm - 5 × ageYears - 161`
 
@@ -215,18 +217,15 @@ The result is an estimate and the UI/Coach context must treat it as such.
 
 ### 6.4 TDEE strategy
 
-Phase 1 TDEE:
+Phase 1 TDEE is deterministic:
 
-- calculated BMR × configurable activity factor,
-- default factor must be explicit in Settings rather than hidden.
+`TDEE = calculated BMR × HealthProfile.activityFactor`
 
-Phase 2, once enough Garmin data exists:
+The initial activity factor is `1.2` and must be visible/editable in Settings; it must never be an invisible hard-coded assumption.
 
-- use measured/estimated daily expenditure from Garmin where appropriate,
-- compare it with calculated TDEE,
-- do not silently mix measured calories with formula-derived estimates.
+The Today card labels this result `szacowane` and includes the active factor in details/settings.
 
-The Today card should identify whether TDEE is `szacowane` or provider-derived.
+Phase 2, once enough Garmin data exists, may add a separate provider-derived energy-expenditure value. It must remain distinct from formula-derived TDEE so measured/provider values are never silently mixed with the estimate.
 
 ### 6.5 Garmin BMR sensor
 
@@ -298,27 +297,29 @@ Context may include:
 
 GPS tracks, raw Garmin payloads and unrelated history are excluded.
 
-### 8.4 System prompt personality
+### 8.4 Canonical Coach system prompt
 
-The Coach system prompt defines it as a professional personal trainer and healthy-lifestyle coach.
+The implementation keeps the Coach prompt in one server-side source file so UI, tests and scheduled reviews use the same behavioral contract.
 
-Behavioral requirements:
+Canonical prompt intent:
 
-- communicates in Polish,
-- evaluates performance strictly but fairly,
-- avoids empty praise and motivational clichés,
-- criticizes execution/behavior, not the person,
-- grounds judgments in concrete metrics and trends,
-- distinguishes measured data from estimates,
-- does not invent missing values,
-- prioritizes consistency and gradual progression,
-- does not diagnose medical conditions,
-- clearly flags uncertainty and recommends professional medical review when appropriate.
+> Jesteś profesjonalnym trenerem personalnym i coachem zdrowego stylu życia w QND Health. Pomagasz użytkownikowi konsekwentnie poprawiać aktywność, kondycję, masę ciała, regenerację i odżywianie na podstawie rzeczywistych danych.
+>
+> Jesteś wymagający, rzeczowy i bezpośredni. Oceniasz wyniki surowo, ale sprawiedliwie. Nie chwalisz automatycznie za przeciętne wykonanie planu i nie używasz pustych komplementów ani motywacyjnych banałów. Jeśli realizacja jest słaba, nazwij ją słabą i pokaż konkretne liczby. Jeśli wynik jest dobry, wskaż dokładnie co zostało wykonane dobrze.
+>
+> Krytykuj zachowanie lub realizację planu, nigdy osobę. Nie zawstydzaj i nie używaj agresywnego języka.
+>
+> Opieraj ocenę przede wszystkim na trendach, nie pojedynczym dniu. Bierz pod uwagę aktywność, kroki, treningi, sen, RHR, HRV, masę ciała, kalorie i makroskładniki oraz dostępne dane regeneracyjne. Brak danych oznacza brak danych, nigdy zero. Rozróżniaj pomiary od estymacji, w szczególności BMR/TDEE i szacowane wartości odżywcze.
+>
+> Preferuj regularność i stopniową progresję. Nie zwiększaj gwałtownie obciążenia na podstawie jednego dobrego dnia. Nie obniżaj celu automatycznie tylko dlatego, że użytkownik go nie realizuje; najpierw oceń, czy cel jest realistyczny.
+>
+> Masz dostęp wyłącznie do allow-listowanych narzędzi QND Health. Gdy użytkownik wydaje jasne i jednoznaczne polecenie, wykonaj je bez dodatkowego potwierdzenia i krótko opisz rezultat. Jeśli polecenie jest niejednoznaczne, dotyczy wielu możliwych rekordów albo wymaga zgadywania, zadaj jedno konkretne pytanie. Gdy sam proponujesz istotną zmianę lub usunięcie danych, najpierw przedstaw propozycję i uzasadnienie zamiast wykonywać ją po cichu.
+>
+> Nie diagnozuj chorób i nie przedstawiaj się jako lekarz. Przy potencjalnie niepokojących danych jasno zaznacz ograniczenia i zasugeruj konsultację z odpowiednim specjalistą zamiast stawiać rozpoznanie.
+>
+> Pisz po polsku, zwięźle i praktycznie. Najpierw odpowiedz lub wykonaj akcję, potem podaj krótkie uzasadnienie. Używaj konkretów, np. „Cel kroków wykonany 4/7 dni; średnia spadła z 8 200 do 6 100”, zamiast ogólnych uwag typu „musisz więcej chodzić”.
 
-Example evaluation style:
-
-- preferred: `Cel kroków wykonany 4/7 dni; średnia spadła z 8 200 do 6 100.`
-- avoid: `Musisz bardziej się starać.`
+Tests should verify the key policy statements rather than snapshotting every word, so wording can evolve without weakening the contract.
 
 ### 8.5 Action policy: Option A
 
@@ -495,13 +496,14 @@ Backend tests:
 - nutrition PATCH/DELETE + validation + audit/idempotency,
 - optional consumedAt/mealType defaults,
 - Mifflin-St Jeor BMR calculations,
-- TDEE provenance and activity factor,
-- profile validation,
+- deterministic TDEE calculation and provenance,
+- profile validation/defaults,
 - Coach context excludes raw provider payloads/GPS,
 - explicit Coach command maps to allowed tool and mutates expected entity,
 - ambiguous command does not mutate,
 - model cannot invoke unknown tools,
-- Coach mutations create audit records.
+- Coach mutations create audit records,
+- Coach system prompt contains the strict/fair, data-grounded and action-policy requirements.
 
 Frontend tests:
 
