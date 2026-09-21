@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanKind {
+  workout
+  metric_goal
+  count_goal
+  manual
+}
+
+enum CompletionStrategy {
+  metric_auto
+  count_manual
+  activity_link
+  manual
+}
+
+enum PlanStatus {
+  planned
+  partial
+  completed
+  skipped
+  moved
+  replaced
+}
+
+enum DataSource {
+  garmin
+  fit
+  manual
+  hermes
+}
+
+enum MealType {
+  breakfast
+  lunch
+  dinner
+  snack
+  other
+}
+
+model PlanItem {
+  id                       String             @id @default(uuid())
+  date                     DateTime           @db.Date
+  kind                     PlanKind
+  activityType             String?
+  title                    String
+  completionStrategy       CompletionStrategy
+  metricKey                String?
+  targetValue              Float?
+  currentManualValue       Float?
+  unit                     String?
+  plannedDurationSeconds   Int?
+  plannedDistanceMeters    Float?
+  targetHrMin              Int?
+  targetHrMax              Int?
+  targetZone               String?
+  targetPaceMinSecondsPerKm Int?
+  targetPaceMaxSecondsPerKm Int?
+  workoutStructureJson     Json?
+  notes                    String?
+  status                   PlanStatus         @default(planned)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  activityMatch            ActivityMatch?
+
+  @@index([date])
+}
+
+model CompletedActivity {
+  id                      String          @id @default(uuid())
+  provider                DataSource
+  providerActivityId      String?
+  activityType            String
+  startedAt               DateTime
+  durationSeconds         Int?
+  distanceMeters          Float?
+  avgHr                   Int?
+  maxHr                   Int?
+  avgPaceSecondsPerKm     Int?
+  cadence                 Float?
+  elevationGainMeters     Float?
+  calories                Float?
+  normalizedMetricsJson   Json?
+  sourceFilePath          String?
+  rawProviderDataJson     Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  activityMatch           ActivityMatch?
+
+  @@unique([provider, providerActivityId])
+  @@index([startedAt])
+}
+
+model ActivityMatch {
+  id                  String            @id @default(uuid())
+  planItemId          String            @unique
+  completedActivityId String            @unique
+  matchScore          Float?
+  matchSource         String
+  createdAt           DateTime          @default(now())
+  planItem            PlanItem          @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+  completedActivity   CompletedActivity @relation(fields: [completedActivityId], references: [id], onDelete: Cascade)
+}
+
+model DailyHealth {
+  id                       String     @id @default(uuid())
+  date                     DateTime   @db.Date
+  source                   DataSource
+  steps                    Int?
+  floorsAscended           Float?
+  intensityMinutes         Int?
+  restingHr                Int?
+  hrv                      Float?
+  stress                   Float?
+  bodyBattery              Float?
+  sleepDurationSeconds     Int?
+  sleepStagesJson          Json?
+  respiration              Float?
+  spo2                     Float?
+  calories                 Float?
+  activeCalories           Float?
+  hydrationMl              Float?
+  readinessMetricsJson     Json?
+  rawProviderDataJson      Json?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+
+  @@unique([date, source])
+  @@index([date])
+}
+
+model BodyMeasurement {
+  id                   String     @id @default(uuid())
+  measuredAt           DateTime
+  source               DataSource
+  weightKg             Float
+  bodyFatPercent       Float?
+  bmi                  Float?
+  muscleMassKg         Float?
+  rawProviderDataJson  Json?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@index([measuredAt])
+}
+
+model NutritionEntry {
+  id             String     @id @default(uuid())
+  consumedAt     DateTime
+  mealType       MealType
+  title          String
+  caloriesKcal   Float?
+  proteinGrams   Float?
+  carbsGrams     Float?
+  fatGrams       Float?
+  fiberGrams     Float?
+  quantityText   String?
+  notes          String?
+  source         DataSource
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([consumedAt])
+}
+
+model ApiToken {
+  id         String   @id @default(uuid())
+  name       String
+  tokenHash  String   @unique
+  scopes     String[]
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  auditEvents AuditEvent[]
+}
+
+model AuditEvent {
+  id          String    @id @default(uuid())
+  actorType   String
+  apiTokenId  String?
+  action      String
+  entityType  String
+  entityId    String?
+  requestId   String
+  summaryJson Json?
+  createdAt   DateTime  @default(now())
+  apiToken    ApiToken? @relation(fields: [apiTokenId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  tokenId        String
+  route          String
+  idempotencyKey String
+  requestHash    String
+  responseStatus Int
+  responseJson   Json
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([tokenId, route, idempotencyKey])
+  @@index([expiresAt])
+}
+
+model ProviderConnection {
+  id                    String   @id @default(uuid())
+  provider              String   @unique
+  encryptedCredentials  String?
+  metadataJson          Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model ProviderSyncCursor {
+  id          String   @id @default(uuid())
+  provider    String
+  dataset     String
+  cursor      String?
+  lastSyncAt  DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([provider, dataset])
+}
+
+model CoachReview {
+  id          String   @id @default(uuid())
+  reviewType  String
+  periodStart DateTime
+  periodEnd   DateTime
+  inputJson   Json
+  outputJson  Json?
+  status      String
+  createdAt   DateTime @default(now())
+}
+
+model CoachRecommendation {
+  id             String   @id @default(uuid())
+  coachReviewId  String
+  type           String
+  status         String
+  proposalJson   Json
+  rationale      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CoachDecision {
+  id                 String   @id @default(uuid())
+  recommendationId   String
+  decision           String
+  beforeJson         Json?
+  afterJson          Json?
+  createdAt          DateTime @default(now())
+}
