@@ -1,32 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, CheckCircle2, Footprints, Gauge, HeartPulse, Moon, Scale } from 'lucide-react';
 import type { QndHealthApi } from './api';
-import type { ProgressResponse, ProgressSeriesPoint } from './types';
+import type { ProgressResponse } from './types';
 import { formatDistance, formatDuration } from './view-model';
 import { rangeForDays } from './insights';
+import { ProgressChart } from './ProgressChart';
 
 const periods = [7, 30, 90] as const;
 
-type MetricKey = 'steps' | 'sleepDurationSeconds' | 'weightKg';
-
-function formatMetric(value: number | null, kind: 'number' | 'duration' | 'weight') {
+function formatSummaryMetric(value: number | null, kind: 'number' | 'duration' | 'weight') {
   if (value == null) return '—';
   if (kind === 'duration') return formatDuration(value);
   if (kind === 'weight') return `${value.toFixed(1)} kg`;
   return Math.round(value).toLocaleString('pl-PL');
-}
-
-function Trend({ points, metric, label }: { points: ProgressSeriesPoint[]; metric: MetricKey; label: string }) {
-  const values = points.flatMap(point => typeof point[metric] === 'number' ? [point[metric] as number] : []);
-  const max = values.length ? Math.max(...values) : 0;
-  return <div className="trend-card">
-    <div className="trend-head"><strong>{label}</strong><span>{values.length ? `${values.length} dni z danymi` : 'Brak danych'}</span></div>
-    <div className="trend-bars">{points.map(point => {
-      const value = point[metric];
-      const height = typeof value === 'number' && max > 0 ? Math.max(5, Math.round((value / max) * 100)) : 0;
-      return <span key={point.date} title={`${point.date}: ${value ?? 'brak'}`} className={value == null ? 'missing' : ''}><i style={{ height: `${height}%` }} /></span>;
-    })}</div>
-  </div>;
 }
 
 export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi; selectedDate: string; onError: (message: string | null) => void }) {
@@ -58,17 +44,67 @@ export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi
       <div className="progress-summary-grid">
         <div className="progress-stat"><CheckCircle2 /><span>Realizacja planu</span><strong>{data.plan.completionPercent == null ? '—' : `${data.plan.completionPercent}%`}</strong><small>{data.plan.completed}/{data.plan.total} wykonane</small></div>
         <div className="progress-stat"><Activity /><span>Aktywności</span><strong>{data.activity.count}</strong><small>{formatDuration(data.activity.durationSeconds)} · {formatDistance(data.activity.distanceMeters)}</small></div>
-        <div className="progress-stat"><Footprints /><span>Śr. kroki</span><strong>{formatMetric(data.averages.steps, 'number')}</strong><small>dni z danymi Garmin</small></div>
-        <div className="progress-stat"><Moon /><span>Śr. sen</span><strong>{formatMetric(data.averages.sleepDurationSeconds, 'duration')}</strong><small>{period} dni</small></div>
+        <div className="progress-stat"><Footprints /><span>Śr. kroki</span><strong>{formatSummaryMetric(data.averages.steps, 'number')}</strong><small>tylko dni z pomiarem</small></div>
+        <div className="progress-stat"><Moon /><span>Śr. sen</span><strong>{formatSummaryMetric(data.averages.sleepDurationSeconds, 'duration')}</strong><small>tylko dni z pomiarem</small></div>
         <div className="progress-stat"><HeartPulse /><span>Śr. RHR / HRV</span><strong>{data.averages.restingHr == null ? '—' : `${data.averages.restingHr} bpm`}</strong><small>HRV {data.averages.hrv == null ? '—' : `${data.averages.hrv} ms`}</small></div>
-        <div className="progress-stat"><Scale /><span>Masa ciała</span><strong>{formatMetric(data.weight.latestKg, 'weight')}</strong><small>{delta == null ? 'Brak trendu' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg w okresie`}</small></div>
+        <div className="progress-stat"><Scale /><span>Masa ciała</span><strong>{formatSummaryMetric(data.weight.latestKg, 'weight')}</strong><small>{delta == null ? 'Brak trendu' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg w okresie`}</small></div>
       </div>
-      <div className="trend-grid">
-        <Trend points={data.series} metric="steps" label="Kroki" />
-        <Trend points={data.series} metric="sleepDurationSeconds" label="Sen" />
-        <Trend points={data.series} metric="weightKg" label="Masa ciała" />
+
+      <div className="progress-chart-grid">
+        <ProgressChart
+          title="Masa ciała"
+          description="Trend pomiarów masy"
+          points={data.series}
+          value={point => point.weightKg}
+          formatValue={value => `${value.toFixed(1)} kg`}
+        />
+        <ProgressChart
+          title="Kroki"
+          description="Rzeczywisty wynik względem celu na dany dzień"
+          points={data.series}
+          value={point => point.steps}
+          target={point => point.stepsGoal}
+          formatValue={value => `${Math.round(value).toLocaleString('pl-PL')}`}
+        />
+        <ProgressChart
+          title="Kalorie"
+          description="Zjedzone kcal względem ręcznie ustawionego celu"
+          points={data.series}
+          value={point => point.caloriesKcal}
+          target={point => point.caloriesGoalKcal}
+          formatValue={value => `${Math.round(value).toLocaleString('pl-PL')} kcal`}
+        />
+        <ProgressChart
+          title="Sen"
+          description="Łączny czas snu"
+          points={data.series}
+          value={point => point.sleepDurationSeconds}
+          formatValue={value => formatDuration(value)}
+        />
+        <ProgressChart
+          title="Tętno spoczynkowe"
+          description="RHR z danych Garmin"
+          points={data.series}
+          value={point => point.restingHr}
+          formatValue={value => `${Math.round(value)} bpm`}
+        />
+        <ProgressChart
+          title="HRV"
+          description="Zmienność rytmu serca"
+          points={data.series}
+          value={point => point.hrv}
+          formatValue={value => `${Math.round(value * 10) / 10} ms`}
+        />
+        <ProgressChart
+          title="VO₂max"
+          description="Wartość raportowana przez Garmin"
+          points={data.series}
+          value={point => point.vo2Max}
+          formatValue={value => `${(Math.round(value * 10) / 10).toLocaleString('pl-PL')}`}
+        />
       </div>
-      <div className="panel progress-notes"><Gauge size={18} /><div><strong>Jak czytać ten widok</strong><p>Średnie liczone są tylko z dni, dla których istnieje pomiar. Brak danych nie jest traktowany jako zero. Po podłączeniu Garmina serie uzupełnią się automatycznie.</p></div></div>
+
+      <div className="panel progress-notes"><Gauge size={18} /><div><strong>Jak czytać ten widok</strong><p>Wykresy nie zamieniają brakujących pomiarów na zero. Przerwa w linii oznacza brak danych. Linie celu dla kroków i kalorii pochodzą z ustawień obowiązujących w QND Health lub z celu dostarczonego przez Garmin.</p></div></div>
     </>}
   </section>;
 }
