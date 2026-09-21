@@ -15,6 +15,13 @@ import type { ActivityMatchRepository } from '../activities/matches.js';
 import { executeSafeWrite } from '../writes/safe-write.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must use YYYY-MM-DD');
+const workoutStructureSchema = z.object({
+  sets: z.number().int().positive().nullable().optional(),
+  repsPerSet: z.number().int().positive().nullable().optional(),
+  secondsPerSet: z.number().int().positive().nullable().optional(),
+  restSeconds: z.number().int().nonnegative().nullable().optional(),
+}).nullable().optional();
+
 const createPlanSchema = z.object({
   date: dateSchema,
   kind: z.enum(['workout', 'metric_goal', 'count_goal', 'manual']),
@@ -26,6 +33,7 @@ const createPlanSchema = z.object({
   activityType: z.string().trim().min(1).max(80).nullable().optional(),
   plannedDurationSeconds: z.number().positive().nullable().optional(),
   plannedDistanceMeters: z.number().positive().nullable().optional(),
+  workoutStructure: workoutStructureSchema,
 }).superRefine((value, ctx) => {
   if ((value.completionStrategy === 'metric_auto' || value.completionStrategy === 'count_manual') && value.targetValue == null) {
     ctx.addIssue({ code: 'custom', path: ['targetValue'], message: 'targetValue is required for metric/count goals' });
@@ -46,6 +54,7 @@ const updatePlanSchema = z.object({
   activityType: z.string().trim().min(1).max(80).nullable().optional(),
   plannedDurationSeconds: z.number().positive().nullable().optional(),
   plannedDistanceMeters: z.number().positive().nullable().optional(),
+  workoutStructure: workoutStructureSchema,
 }).refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 const progressSchema = z.object({ value: z.number().nonnegative() });
@@ -139,6 +148,7 @@ export function registerPlanRoutes(
           activityType: input.activityType ?? null,
           plannedDurationSeconds: input.plannedDurationSeconds ?? null,
           plannedDistanceMeters: input.plannedDistanceMeters ?? null,
+          workoutStructure: input.workoutStructure ?? null,
           linkedActivityId: null,
         });
         const body = serializePlan(created);
