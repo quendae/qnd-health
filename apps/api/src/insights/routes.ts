@@ -96,13 +96,7 @@ export function registerInsightRoutes(app: FastifyInstance, deps: {
     const { from, to } = parsed.data;
     const data = await loadRange(from, to);
     const healthByDate = new Map(data.health.map(item => [item.date, item]));
-    const dates = new Set<string>([
-      ...data.plans.map(item => item.date),
-      ...data.health.map(item => item.date),
-      ...data.measurements.map(item => localIsoDate(item.measuredAt, deps.timeZone)),
-      ...data.activities.map(item => localIsoDate(item.startedAt, deps.timeZone)),
-    ]);
-    const days = [...dates].sort().reverse().map(date => {
+    const days = calendarDays(from, to).reverse().map(date => {
       const plans = data.plans.filter(item => item.date === date).map(item => ({ ...item, status: derivedPlanStatus(item, healthByDate.get(date) ?? null) }));
       const measurements = data.measurements.filter(item => localIsoDate(item.measuredAt, deps.timeZone) === date).sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
       return {
@@ -153,6 +147,8 @@ export function registerInsightRoutes(app: FastifyInstance, deps: {
         vo2Max: health?.vo2Max ?? null,
         caloriesKcal: nutritionSummary.totals.caloriesKcal,
         caloriesGoalKcal: data.profile?.dailyCaloriesGoalKcal ?? null,
+        proteinGrams: nutritionSummary.totals.proteinGrams,
+        proteinGoalGrams: data.profile?.dailyProteinGoalGrams ?? null,
         weightKg: measurements[0]?.weightKg ?? null,
         activitiesCount: activities.length,
         activityDurationSeconds: activities.reduce((sum, item) => sum + (item.durationSeconds ?? 0), 0),
