@@ -1,8 +1,8 @@
 import type { PlanRepository, StoredPlanItem, NewStoredPlanItem } from '../plans/repository.js';
 import type { NutritionRepository, NutritionRecord, NewNutritionRecord } from '../nutrition/repository.js';
 import type { MeasurementRepository, MeasurementRecord, NewMeasurementRecord } from '../measurements/repository.js';
-import type { DailyHealthRepository, DailyHealthRecord } from '../health/repository.js';
-import type { CompletedActivityRepository, CompletedActivityRecord } from '../activities/repository.js';
+import type { DailyHealthRepository, DailyHealthRecord, DailyHealthUpsert } from '../health/repository.js';
+import type { CompletedActivityRepository, CompletedActivityRecord, ProviderActivityUpsert } from '../activities/repository.js';
 import type { ActivityMatchRepository } from '../activities/matches.js';
 import type { ApiTokenRepository } from '../auth/service.js';
 import type { AuditRepository } from '../audit/repository.js';
@@ -59,27 +59,66 @@ function mapMeasurement(row: any): MeasurementRecord {
   return {
     id: row.id, measuredAt: row.measuredAt.toISOString(), weightKg: row.weightKg,
     bodyFatPercent: row.bodyFatPercent ?? null, bmi: row.bmi ?? null,
-    muscleMassKg: row.muscleMassKg ?? null, source: row.source,
+    muscleMassKg: row.muscleMassKg ?? null, bodyWaterPercent: row.bodyWaterPercent ?? null,
+    boneMassKg: row.boneMassKg ?? null, visceralFat: row.visceralFat ?? null,
+    metabolicAge: row.metabolicAge ?? null, physiqueRating: row.physiqueRating ?? null,
+    transport: row.transport ?? null, source: row.source,
   };
 }
 
 function mapDailyHealth(row: any): DailyHealthRecord {
   return {
-    date: formatDateOnly(row.date), source: row.source, steps: row.steps ?? null,
-    floorsAscended: row.floorsAscended ?? null, intensityMinutes: row.intensityMinutes ?? null,
-    restingHr: row.restingHr ?? null, hrv: row.hrv ?? null, stress: row.stress ?? null,
-    bodyBattery: row.bodyBattery ?? null, sleepDurationSeconds: row.sleepDurationSeconds ?? null,
+    date: formatDateOnly(row.date), source: row.source, transport: row.transport ?? null,
+    steps: row.steps ?? null, floorsAscended: row.floorsAscended ?? null,
+    intensityMinutes: row.intensityMinutes ?? null, restingHr: row.restingHr ?? null,
+    hrv: row.hrv ?? null, stress: row.stress ?? null, bodyBattery: row.bodyBattery ?? null,
+    sleepDurationSeconds: row.sleepDurationSeconds ?? null, sleepStages: row.sleepStagesJson ?? null,
     respiration: row.respiration ?? null, spo2: row.spo2 ?? null, calories: row.calories ?? null,
     activeCalories: row.activeCalories ?? null, hydrationMl: row.hydrationMl ?? null,
+    readiness: row.readinessMetricsJson ?? null,
+  };
+}
+
+function dailyHealthData(input: DailyHealthUpsert) {
+  return {
+    date: dateOnly(input.date), source: input.source, transport: input.transport ?? null,
+    steps: input.steps ?? null, floorsAscended: input.floorsAscended ?? null,
+    intensityMinutes: input.intensityMinutes ?? null, restingHr: input.restingHr ?? null,
+    hrv: input.hrv ?? null, stress: input.stress ?? null, bodyBattery: input.bodyBattery ?? null,
+    sleepDurationSeconds: input.sleepDurationSeconds ?? null, sleepStagesJson: input.sleepStages ?? null,
+    respiration: input.respiration ?? null, spo2: input.spo2 ?? null, calories: input.calories ?? null,
+    activeCalories: input.activeCalories ?? null, hydrationMl: input.hydrationMl ?? null,
+    readinessMetricsJson: input.readiness ?? null,
   };
 }
 
 function mapActivity(row: any): CompletedActivityRecord {
   return {
-    id: row.id, provider: row.provider, activityType: row.activityType,
+    id: row.id, provider: row.provider, providerActivityId: row.providerActivityId ?? null,
+    transport: row.transport ?? null, activityType: row.activityType,
     startedAt: row.startedAt.toISOString(), durationSeconds: row.durationSeconds ?? null,
     distanceMeters: row.distanceMeters ?? null, avgHr: row.avgHr ?? null,
-    maxHr: row.maxHr ?? null, calories: row.calories ?? null,
+    maxHr: row.maxHr ?? null, avgPaceSecondsPerKm: row.avgPaceSecondsPerKm ?? null,
+    cadence: row.cadence ?? null, elevationGainMeters: row.elevationGainMeters ?? null,
+    calories: row.calories ?? null,
+  };
+}
+
+function activityData(input: ProviderActivityUpsert) {
+  return {
+    provider: input.provider,
+    providerActivityId: input.providerActivityId,
+    transport: input.transport ?? null,
+    activityType: input.activityType,
+    startedAt: new Date(input.startedAt),
+    durationSeconds: input.durationSeconds ?? null,
+    distanceMeters: input.distanceMeters ?? null,
+    avgHr: input.avgHr ?? null,
+    maxHr: input.maxHr ?? null,
+    avgPaceSecondsPerKm: input.avgPaceSecondsPerKm ?? null,
+    cadence: input.cadence ?? null,
+    elevationGainMeters: input.elevationGainMeters ?? null,
+    calories: input.calories ?? null,
   };
 }
 
@@ -138,11 +177,29 @@ export function createPrismaRepositories(prisma: PrismaClientPort) {
       return row ? mapDailyHealth(row) : null;
     },
     async list(from, to) { return (await prisma.dailyHealth.findMany({ where: rangeWhere('date', from, to), orderBy: { date: 'asc' } })).map(mapDailyHealth); },
+    async upsert(input) {
+      const data = dailyHealthData(input);
+      const row = await prisma.dailyHealth.upsert({
+        where: { date_source: { date: data.date, source: data.source } },
+        create: data,
+        update: data,
+      });
+      return mapDailyHealth(row);
+    },
   };
 
   const completedActivityRepository: CompletedActivityRepository = {
     async list(from, to) { return (await prisma.completedActivity.findMany({ where: rangeWhere('startedAt', from, to), orderBy: { startedAt: 'desc' } })).map(mapActivity); },
     async findById(id) { const row = await prisma.completedActivity.findUnique({ where: { id } }); return row ? mapActivity(row) : null; },
+    async upsertProviderActivity(input) {
+      const data = activityData(input);
+      const row = await prisma.completedActivity.upsert({
+        where: { provider_providerActivityId: { provider: data.provider, providerActivityId: data.providerActivityId } },
+        create: data,
+        update: data,
+      });
+      return mapActivity(row);
+    },
   };
 
   const activityMatchRepository: ActivityMatchRepository = {
