@@ -3,8 +3,9 @@
   "private": true,
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @qnd-health/activity-model build && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "smoke:runtime": "node -e \"Promise.all([import('./apps/api/dist/src/runtime.js'), import('./apps/api/dist/src/generated/prisma/client.js')]).then(() => console.log('runtime smoke ok'))\""
   }
 }
