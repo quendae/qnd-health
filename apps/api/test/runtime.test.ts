@@ -14,6 +14,7 @@ function fakePrisma() {
       findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn(),
     },
     bodyMeasurement: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    healthProfile: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn() },
     dailyHealth: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     completedActivity: { findMany: vi.fn().mockResolvedValue([]) },
     apiToken: {
@@ -42,10 +43,11 @@ describe('buildRuntimeApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ date: '2026-09-21', health: null });
+    expect(response.json()).toMatchObject({ date: '2026-09-21', health: null, energy: null });
     expect(prisma.planItem.findMany).toHaveBeenCalled();
     expect(prisma.nutritionEntry.findMany).toHaveBeenCalled();
     expect(prisma.bodyMeasurement.findMany).toHaveBeenCalled();
+    expect(prisma.healthProfile.findUnique).toHaveBeenCalled();
     expect(prisma.dailyHealth.findFirst).toHaveBeenCalled();
     expect(prisma.completedActivity.findMany).toHaveBeenCalled();
     expect(prisma.apiToken.findUnique).toHaveBeenCalled();
