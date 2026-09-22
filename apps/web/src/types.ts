@@ -143,6 +143,7 @@ export interface TodayResponse {
     goalFatGrams: number | null;
     goalFiberGrams: number | null;
   };
+  goalRevision?: { id: string | null; effectiveFrom: string | null; source: string | null; reason: string | null } | null;
   weekToDate: { totalPlanItems: number; completed: number; partial: number; planned: number };
   remainingWeek: Omit<PlanItem, 'progress' | 'candidates'>[];
 }
@@ -182,8 +183,17 @@ export interface ProgressSeriesPoint {
 }
 
 export interface ProgressResponse {
-  from: string;
-  to: string;
+  period: { from: string; to: string; days: number };
+  plan: { total: number; completed: number; partial: number; planned: number; other: number; completionPercent: number | null };
+  activity: { count: number; durationSeconds: number; distanceMeters: number };
+  averages: {
+    steps: number | null;
+    restingHr: number | null;
+    hrv: number | null;
+    bodyBattery: number | null;
+    sleepDurationSeconds: number | null;
+  };
+  weight: { firstKg: number | null; latestKg: number | null; deltaKg: number | null };
   series: ProgressSeriesPoint[];
 }
 
@@ -197,14 +207,26 @@ export interface CoachConversation {
 export interface CoachMessage {
   id: string;
   conversationId: string;
-  role: 'user' | 'assistant' | 'tool' | string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
   content: string;
   model: string | null;
-  toolMetadata: Record<string, unknown> | null;
+  toolMetadata: unknown | null;
   createdAt: string;
+}
+
+export interface CoachAction {
+  toolCallId: string;
+  name: string;
+  status: 'completed';
+  result: unknown;
 }
 
 export interface CoachTurnResponse {
   message: CoachMessage;
-  actions: Array<{ toolCallId: string; name: string; status: 'completed'; result: unknown }>;
+  actions: CoachAction[];
+}
+
+export interface CoachProviderErrorPayload {
+  error?: { code?: string; message?: string };
+  completedActions?: CoachAction[];
 }
