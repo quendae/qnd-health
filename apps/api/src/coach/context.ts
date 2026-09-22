@@ -3,6 +3,7 @@ import type { DailyHealthRecord } from '../health/repository.js';
 import type { MeasurementRecord } from '../measurements/repository.js';
 import type { NutritionRecord } from '../nutrition/repository.js';
 import type { StoredPlanItem } from '../plans/repository.js';
+import type { ProfileGoalValues } from '../profile/goal-repository.js';
 import type { HealthProfileRecord } from '../profile/repository.js';
 
 interface CoachProgressInput {
@@ -20,6 +21,10 @@ interface CoachTodayInput {
   activity: { steps: { current: number; target: number; goalSource: string } };
   nutrition: {
     goalKcal: number | null;
+    goalProteinGrams?: number | null;
+    goalCarbsGrams?: number | null;
+    goalFatGrams?: number | null;
+    goalFiberGrams?: number | null;
     summary: {
       totals: {
         caloriesKcal: number | null;
@@ -32,9 +37,12 @@ interface CoachTodayInput {
   };
 }
 
+type CoachProfile = HealthProfileRecord & Partial<ProfileGoalValues>;
+
 export interface CoachContextInput {
   date: string;
-  profile: HealthProfileRecord | null;
+  profile: CoachProfile | null;
+  goalRevision?: { id: string | null; effectiveFrom: string | null; source: string | null; reason: string | null } | null;
   today: CoachTodayInput;
   plans: StoredPlanItem[];
   activities: CompletedActivityRecord[];
@@ -164,18 +172,27 @@ export function buildCoachContext(input: CoachContextInput) {
   const today = input.today;
   return {
     date: input.date,
+    goalRevision: input.goalRevision ?? null,
     goals: {
       steps: today.activity.steps.target,
+      activityFactor: profile?.activityFactor ?? null,
       caloriesKcal: today.nutrition.goalKcal ?? profile?.dailyCaloriesGoalKcal ?? null,
-      proteinGrams: profile?.dailyProteinGoalGrams ?? null,
+      proteinGrams: today.nutrition.goalProteinGrams ?? profile?.dailyProteinGoalGrams ?? null,
+      carbsGrams: today.nutrition.goalCarbsGrams ?? profile?.dailyCarbsGoalGrams ?? null,
+      fatGrams: today.nutrition.goalFatGrams ?? profile?.dailyFatGoalGrams ?? null,
+      fiberGrams: today.nutrition.goalFiberGrams ?? profile?.dailyFiberGoalGrams ?? null,
     },
     profile: profile ? {
+      dateOfBirth: profile.dateOfBirth,
       heightCm: profile.heightCm,
       sexForBmr: profile.sexForBmr,
       activityFactor: profile.activityFactor,
       defaultStepsGoal: profile.defaultStepsGoal,
       dailyCaloriesGoalKcal: profile.dailyCaloriesGoalKcal,
       dailyProteinGoalGrams: profile.dailyProteinGoalGrams,
+      dailyCarbsGoalGrams: profile.dailyCarbsGoalGrams ?? null,
+      dailyFatGoalGrams: profile.dailyFatGoalGrams ?? null,
+      dailyFiberGoalGrams: profile.dailyFiberGoalGrams ?? null,
     } : null,
     today: {
       steps: { ...today.activity.steps },
@@ -194,7 +211,10 @@ export function buildCoachContext(input: CoachContextInput) {
         fatGrams: today.nutrition.summary.totals.fatGrams,
         fiberGrams: today.nutrition.summary.totals.fiberGrams,
         goalKcal: today.nutrition.goalKcal,
-        goalProteinGrams: profile?.dailyProteinGoalGrams ?? null,
+        goalProteinGrams: today.nutrition.goalProteinGrams ?? profile?.dailyProteinGoalGrams ?? null,
+        goalCarbsGrams: today.nutrition.goalCarbsGrams ?? profile?.dailyCarbsGoalGrams ?? null,
+        goalFatGrams: today.nutrition.goalFatGrams ?? profile?.dailyFatGoalGrams ?? null,
+        goalFiberGrams: today.nutrition.goalFiberGrams ?? profile?.dailyFiberGoalGrams ?? null,
       },
     },
     plans: input.plans.map(safePlan),
