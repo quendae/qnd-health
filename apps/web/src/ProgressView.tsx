@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BatteryCharging, CheckCircle2, Droplets, Footprints, Gauge, HeartPulse, Moon, Scale, Sparkles, Stairs, Timer, Wind } from 'lucide-react';
+import { Activity, BatteryCharging, CheckCircle2, Droplets, Footprints, Gauge, HeartPulse, Moon, Scale, Sparkles, Timer, Wind } from 'lucide-react';
 import type { QndHealthApi } from './api';
 import type { ProgressResponse, ProgressSeriesPoint } from './types';
 import { formatDistance, formatDuration } from './view-model';
@@ -109,7 +109,7 @@ export function ProgressView({ api, selectedDate, onError }: { api: QndHealthApi
         <div className="progress-stat"><Sparkles /><span>VO₂max / SpO₂</span><strong>{data.averages.vo2Max == null ? '—' : decimal(data.averages.vo2Max)}</strong><small>SpO₂ {data.averages.spo2 == null ? '—' : `${decimal(data.averages.spo2)}%`}</small></div>
         <div className="progress-stat"><Timer /><span>Intensywność</span><strong>{data.averages.intensityMinutes == null ? '—' : `${decimal(data.averages.intensityMinutes)} min`}</strong><small>aktywne kcal {data.averages.activeCalories == null ? '—' : decimal(data.averages.activeCalories)}</small></div>
         <div className="progress-stat"><Droplets /><span>Nawodnienie</span><strong>{data.averages.hydrationMl == null ? '—' : `${decimal(data.averages.hydrationMl)} ml`}</strong><small>średnio na dzień z pomiarem</small></div>
-        <div className="progress-stat"><Stairs /><span>Piętra</span><strong>{data.averages.floorsAscended == null ? '—' : decimal(data.averages.floorsAscended)}</strong><small>w dół {data.averages.floorsDescended == null ? '—' : decimal(data.averages.floorsDescended)}</small></div>
+        <div className="progress-stat"><Footprints /><span>Piętra</span><strong>{data.averages.floorsAscended == null ? '—' : decimal(data.averages.floorsAscended)}</strong><small>w dół {data.averages.floorsDescended == null ? '—' : decimal(data.averages.floorsDescended)}</small></div>
         <div className="progress-stat"><Wind /><span>Oddech</span><strong>{data.averages.respiration == null ? '—' : `${decimal(data.averages.respiration)} /min`}</strong><small>średnia z dostępnych dni</small></div>
         <div className="progress-stat"><Scale /><span>Masa ciała</span><strong>{formatSummaryMetric(data.weight.latestKg, 'weight')}</strong><small>{delta == null ? 'Brak trendu' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg w okresie`}</small></div>
       </div>
