@@ -16,7 +16,7 @@ import { WidgetSettings } from './WidgetSettings';
 import type { ActivityCandidate, NutritionEntry, PlanItem, TodayResponse, WorkoutStructure } from './types';
 import { activityLabel } from './activity-catalog';
 import { formatMetric } from './format-number';
-import { dateLabel, formatDistance, formatDuration, greeting, nutritionMacroCards, nutritionMealListClass, progressPercent, shortDateLabel, weekCompletion } from './view-model';
+import { dateLabel, formatDistance, formatDuration, greeting, nutritionMacroCards, nutritionMealListClass, progressPercent, shortDateLabel, todayCoachInsights, weekCompletion } from './view-model';
 import { defaultTodayWidgetLayout, normalizeTodayWidgetLayout, type TodayWidgetId, type TodayWidgetPreference } from './widget-layout';
 
 const WIDGETS_KEY = 'qnd-health.today-widgets';
@@ -196,8 +196,14 @@ function RemainingWeek({ today }: { today: TodayResponse }) {
 }
 
 function CoachPanel({ today }: { today: TodayResponse }) {
-  const completion = weekCompletion(today);
-  return <section className="panel coach-panel widget-card widget-wide"><header><div><h2><Brain /> AI Coach</h2><p>Coach ma dostęp do bieżących danych i wersjonowanych celów.</p></div><Sparkles size={20} /></header><div className="coach-content"><div className="coach-brief"><TrendingUp /><div><strong>{completion >= 70 ? 'Dobry rytm tygodnia' : 'Buduj regularność krok po kroku'}</strong><p>Realizacja planu tygodnia: {completion}%. {today.health?.bodyBattery != null ? `Body Battery: ${today.health.bodyBattery}/100.` : 'Dane regeneracji pojawią się po synchronizacji z Garminem.'}</p></div></div><ul><li>Sprawdź dzisiejszy plan aktywności</li><li>Uzupełniaj posiłki możliwie kompletnie</li><li>Zmiany obciążenia oprzyj o dane regeneracji</li></ul></div></section>;
+  const insight = todayCoachInsights(today);
+  return <section className="panel coach-panel widget-card widget-wide">
+    <header><div><h2><Brain /> Uwagi Coacha</h2><p>Szybka ocena bieżących danych bez dodatkowego zapytania do modelu.</p></div><Sparkles size={20} /></header>
+    <div className="coach-content rich">
+      <div className="coach-brief"><TrendingUp /><div><strong>{insight.headline}</strong><p>{insight.summary}</p></div></div>
+      <ul className="coach-insight-list">{insight.items.map(item => <li key={item}>{item}</li>)}</ul>
+    </div>
+  </section>;
 }
 
 function HealthMetrics({ today }: { today: TodayResponse }) {
@@ -313,6 +319,10 @@ export default function App() {
     finally { setDeletingNutritionId(null); }
   }
 
+  function goHome() {
+    setSection('today');
+    setDate(warsawToday());
+  }
   function setWidgets(next: TodayWidgetPreference[]) { setWidgetLayout(normalizeTodayWidgetLayout(next)); }
 
   if (authenticated === null) return <div className="loading-card auth-loading">Sprawdzanie sesji…</div>;
@@ -338,7 +348,7 @@ export default function App() {
   else content = <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>;
 
   return <div className="app-shell">
-    <aside className="sidebar"><div className="logo"><div className="logo-symbol">Q</div><div><strong>QND Health</strong><span>Ruch · Odżywianie · Postęp</span></div></div><nav>{navItems.map(([id, label, Icon]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><Icon size={19} /> {label}</button>)}</nav><div className="privacy"><Sparkles size={16} /><div><strong>Prywatne. Twoje.</strong><span>Self-hosted. Dane zostają u Ciebie.</span></div></div></aside>
+    <aside className="sidebar"><button type="button" className="logo logo-home" onClick={goHome} aria-label="Przejdź do dzisiejszego widoku"><div className="logo-symbol">Q</div><div><strong>QND Health</strong><span>Ruch · Odżywianie · Postęp</span></div></button><nav>{navItems.map(([id, label, Icon]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><Icon size={19} /> {label}</button>)}</nav><div className="privacy"><Sparkles size={16} /><div><strong>Prywatne. Twoje.</strong><span>Self-hosted. Dane zostają u Ciebie.</span></div></div></aside>
     <main>
       {section === 'today' && <div className="topline"><div><span className="eyebrow">{greeting()}</span><div className="date-row"><h1>{dateLabel(date)}</h1><button className="icon-button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Poprzedni dzień"><ChevronLeft /></button><button className="icon-button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Następny dzień"><ChevronRight /></button></div></div><div className="top-actions"><button className="ghost" onClick={() => setShowWidgetSettings(true)}><SlidersHorizontal size={16} /> Dostosuj widok</button><button className="ghost" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16} /> Synchronizuj</button><span className={`connection ${today?.health ? 'connected' : ''}`}><i /> {today?.health ? 'Dane Garmin' : 'Brak danych Garmin'}</span><button className="icon-button" title="Wyloguj" onClick={() => void signOut()}><LogOut size={17} /></button></div></div>}
       {error && <div className="error-banner">{error}</div>}
