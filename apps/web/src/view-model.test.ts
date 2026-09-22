@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as viewModel from './view-model';
-import { dateLabel, formatDistance, formatDuration, progressPercent, weekCompletion } from './view-model';
+import { dateLabel, formatDistance, formatDuration, progressPercent, todayCoachInsights, weekCompletion } from './view-model';
 import type { TodayResponse } from './types';
 
 describe('Today view model', () => {
@@ -49,5 +49,38 @@ describe('Today view model', () => {
     ]);
     expect(nutritionMealListClass!(7)).toBe('meal-list');
     expect(nutritionMealListClass!(8)).toBe('meal-list scrollable');
+  });
+
+  it('builds concrete Today coach observations from activity, nutrition and recovery data', () => {
+    const today = {
+      date: '2026-09-22',
+      health: {
+        date: '2026-09-22', source: 'garmin', steps: 6200, restingHr: 64, hrv: 46, stress: 31, bodyBattery: 72,
+        sleepDurationSeconds: 26700, intensityMinutes: 22, hydrationMl: 1800,
+      },
+      latestMeasurement: { id: 'm1', measuredAt: '2026-09-22T07:00:00+02:00', weightKg: 122.4, bodyFatPercent: 30.5, bmi: 37.8, muscleMassKg: 80.5, source: 'manual' },
+      energy: { bmrKcal: 2100, tdeeKcal: 2730, source: 'mifflin_st_jeor', activityFactor: 1.3 },
+      activity: { steps: { current: 6200, target: 8000, goalSource: 'profile' }, items: [] },
+      nutrition: {
+        entries: [],
+        summary: {
+          date: '2026-09-22', entryCount: 3,
+          totals: { caloriesKcal: 1500, proteinGrams: 105, carbsGrams: 150, fatGrams: 50, fiberGrams: 19 },
+          completeness: { caloriesKcal: true, proteinGrams: true, carbsGrams: true, fatGrams: true, fiberGrams: true },
+        },
+        goalKcal: 2000, goalProteinGrams: 170, goalCarbsGrams: 180, goalFatGrams: 65, goalFiberGrams: 32,
+      },
+      weekToDate: { totalPlanItems: 5, completed: 3, partial: 1, planned: 1 },
+      remainingWeek: [],
+    } as TodayResponse;
+
+    const insight = todayCoachInsights(today);
+    expect(insight.headline).toContain('70%');
+    expect(insight.summary).toContain('6 200 / 8 000');
+    expect(insight.items.join(' ')).toContain('500 kcal');
+    expect(insight.items.join(' ')).toContain('105 / 170 g');
+    expect(insight.items.join(' ')).toContain('7 h 25 min');
+    expect(insight.items.join(' ')).toContain('Body Battery 72/100');
+    expect(insight.items.length).toBeGreaterThanOrEqual(5);
   });
 });
