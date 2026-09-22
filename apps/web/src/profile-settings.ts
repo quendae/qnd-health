@@ -8,6 +8,9 @@ export interface ProfileFormState {
   defaultStepsGoal: string;
   dailyCaloriesGoalKcal: string;
   dailyProteinGoalGrams: string;
+  dailyCarbsGoalGrams: string;
+  dailyFatGoalGrams: string;
+  dailyFiberGoalGrams: string;
 }
 
 export function profileFormDefaults(profile: HealthProfile | null): ProfileFormState {
@@ -19,15 +22,28 @@ export function profileFormDefaults(profile: HealthProfile | null): ProfileFormS
     defaultStepsGoal: String(profile?.defaultStepsGoal ?? 7500),
     dailyCaloriesGoalKcal: profile?.dailyCaloriesGoalKcal == null ? '' : String(profile.dailyCaloriesGoalKcal),
     dailyProteinGoalGrams: profile?.dailyProteinGoalGrams == null ? '' : String(profile.dailyProteinGoalGrams),
+    dailyCarbsGoalGrams: profile?.dailyCarbsGoalGrams == null ? '' : String(profile.dailyCarbsGoalGrams),
+    dailyFatGoalGrams: profile?.dailyFatGoalGrams == null ? '' : String(profile.dailyFatGoalGrams),
+    dailyFiberGoalGrams: profile?.dailyFiberGoalGrams == null ? '' : String(profile.dailyFiberGoalGrams),
   };
+}
+
+function nullablePositiveInteger(value: string, label: string): number | null {
+  if (value.trim() === '') return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${label} musi być dodatnią liczbą całkowitą`);
+  return parsed;
 }
 
 export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, 'id'> {
   const heightCm = form.heightCm.trim() === '' ? null : Number(form.heightCm);
   const activityFactor = Number(form.activityFactor);
   const defaultStepsGoal = Number(form.defaultStepsGoal);
-  const dailyCaloriesGoalKcal = form.dailyCaloriesGoalKcal.trim() === '' ? null : Number(form.dailyCaloriesGoalKcal);
-  const dailyProteinGoalGrams = form.dailyProteinGoalGrams.trim() === '' ? null : Number(form.dailyProteinGoalGrams);
+  const dailyCaloriesGoalKcal = nullablePositiveInteger(form.dailyCaloriesGoalKcal, 'Cel kcal');
+  const dailyProteinGoalGrams = nullablePositiveInteger(form.dailyProteinGoalGrams, 'Cel białka');
+  const dailyCarbsGoalGrams = nullablePositiveInteger(form.dailyCarbsGoalGrams, 'Cel węglowodanów');
+  const dailyFatGoalGrams = nullablePositiveInteger(form.dailyFatGoalGrams, 'Cel tłuszczu');
+  const dailyFiberGoalGrams = nullablePositiveInteger(form.dailyFiberGoalGrams, 'Cel błonnika');
 
   if (heightCm != null && (!Number.isFinite(heightCm) || heightCm <= 0)) {
     throw new Error('Wzrost musi być większy od zera');
@@ -38,12 +54,6 @@ export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, '
   if (!Number.isInteger(defaultStepsGoal) || defaultStepsGoal <= 0) {
     throw new Error('Cel kroków musi być dodatnią liczbą całkowitą');
   }
-  if (dailyCaloriesGoalKcal != null && (!Number.isInteger(dailyCaloriesGoalKcal) || dailyCaloriesGoalKcal <= 0)) {
-    throw new Error('Cel kcal musi być dodatnią liczbą całkowitą');
-  }
-  if (dailyProteinGoalGrams != null && (!Number.isInteger(dailyProteinGoalGrams) || dailyProteinGoalGrams <= 0)) {
-    throw new Error('Cel białka musi być dodatnią liczbą całkowitą');
-  }
 
   return {
     dateOfBirth: form.dateOfBirth || null,
@@ -53,5 +63,8 @@ export function buildProfilePatch(form: ProfileFormState): Omit<HealthProfile, '
     defaultStepsGoal,
     dailyCaloriesGoalKcal,
     dailyProteinGoalGrams,
+    dailyCarbsGoalGrams,
+    dailyFatGoalGrams,
+    dailyFiberGoalGrams,
   };
 }
