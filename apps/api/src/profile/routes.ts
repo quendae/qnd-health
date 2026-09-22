@@ -9,7 +9,7 @@ import { localIsoDate } from '../today/date-utils.js';
 import { calculateAge } from './energy.js';
 import type { ProfileGoalService } from './goals.js';
 import type { ProfileGoalValues } from './goal-repository.js';
-import type { HealthProfileRepository } from './repository.js';
+import type { HealthProfilePatch, HealthProfileRepository } from './repository.js';
 
 const profilePatchSchema = z.object({
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -23,16 +23,6 @@ const profilePatchSchema = z.object({
   dailyFatGoalGrams: z.number().int().min(1).max(1000).nullable().optional(),
   dailyFiberGoalGrams: z.number().int().min(1).max(500).nullable().optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
-
-const goalKeys: Array<keyof ProfileGoalValues> = [
-  'activityFactor',
-  'defaultStepsGoal',
-  'dailyCaloriesGoalKcal',
-  'dailyProteinGoalGrams',
-  'dailyCarbsGoalGrams',
-  'dailyFatGoalGrams',
-  'dailyFiberGoalGrams',
-];
 
 async function requireRead(request: FastifyRequest, authorizer: RequestAuthorizer) {
   return authorizer.authorize(request.headers.authorization, ['measurements:read']);
@@ -84,20 +74,32 @@ export function registerProfileRoutes(app: FastifyInstance, deps: {
       action: 'profile.update',
       entityType: 'HealthProfile',
       perform: async () => {
-        const profilePatch: Record<string, unknown> = {};
-        const goalPatch: Partial<ProfileGoalValues> = {};
-        for (const [key, value] of Object.entries(parsed.data)) {
-          if (goalKeys.includes(key as keyof ProfileGoalValues)) {
-            (goalPatch as Record<string, unknown>)[key] = value;
-          } else {
-            profilePatch[key] = value;
-          }
-        }
+        const {
+          activityFactor,
+          defaultStepsGoal,
+          dailyCaloriesGoalKcal,
+          dailyProteinGoalGrams,
+          dailyCarbsGoalGrams,
+          dailyFatGoalGrams,
+          dailyFiberGoalGrams,
+          ...demographicPatch
+        } = parsed.data;
+
+        const goalPatch: Partial<ProfileGoalValues> = {
+          ...(activityFactor !== undefined ? { activityFactor } : {}),
+          ...(defaultStepsGoal !== undefined ? { defaultStepsGoal } : {}),
+          ...(dailyCaloriesGoalKcal !== undefined ? { dailyCaloriesGoalKcal } : {}),
+          ...(dailyProteinGoalGrams !== undefined ? { dailyProteinGoalGrams } : {}),
+          ...(dailyCarbsGoalGrams !== undefined ? { dailyCarbsGoalGrams } : {}),
+          ...(dailyFatGoalGrams !== undefined ? { dailyFatGoalGrams } : {}),
+          ...(dailyFiberGoalGrams !== undefined ? { dailyFiberGoalGrams } : {}),
+        };
+        const profilePatch: HealthProfilePatch = demographicPatch;
 
         const before = await deps.profileRepository.get();
-        const savedProfile = Object.keys(profilePatch).length > 0
-          ? await deps.profileRepository.upsert(profilePatch)
-          : before;
+        if (Object.keys(profilePatch).length > 0 || (!before && Object.keys(goalPatch).length > 0)) {
+          await deps.profileRepository.upsert(profilePatch);
+        }
 
         const today = localIsoDate(new Date().toISOString(), deps.timeZone);
         let goals = deps.profileGoalService ? await deps.profileGoalService.resolve(today) : null;
@@ -110,11 +112,12 @@ export function registerProfileRoutes(app: FastifyInstance, deps: {
               reason: 'Zmiana w Ustawieniach',
             });
           } else {
-            await deps.profileRepository.upsert(goalPatch);
+            // Compatibility for isolated route tests/embedders without the revision service.
+            await deps.profileRepository.upsert(goalPatch as HealthProfilePatch);
           }
         }
 
-        const finalProfile = savedProfile ?? await deps.profileRepository.get();
+        const finalProfile = await deps.profileRepository.get();
         const body = finalProfile && goals ? { ...finalProfile, ...goals } : finalProfile;
         return {
           statusCode: 200,
