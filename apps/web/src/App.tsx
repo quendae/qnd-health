@@ -9,7 +9,6 @@ import { CustomActivityDialog } from './CustomActivityDialog';
 import { NutritionEntryDialog } from './NutritionEntryDialog';
 import { CoachView } from './CoachView';
 import { HistoryView } from './HistoryView';
-import { LoginGate } from './LoginGate';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
 import { SettingsView } from './SettingsView';
@@ -27,7 +26,6 @@ const navItems = [
 ] as const;
 
 type Section = typeof navItems[number][0];
-type SessionState = 'checking' | 'authenticated' | 'anonymous';
 
 function warsawToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -146,16 +144,15 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
 }) {
   const { totals } = today.nutrition.summary;
   const goalKcal = today.nutrition.goalKcal;
-  const goalProtein = today.nutrition.goalProteinGrams;
   const caloriePercent = totals.caloriesKcal != null && goalKcal != null && goalKcal > 0
     ? Math.round((totals.caloriesKcal / goalKcal) * 100)
     : null;
   const calorieDelta = totals.caloriesKcal != null && goalKcal != null ? goalKcal - totals.caloriesKcal : null;
   const macro = nutritionMacroCards(totals, {
-    proteinGrams: goalProtein,
-    carbsGrams: null,
-    fatGrams: null,
-    fiberGrams: null,
+    proteinGrams: today.nutrition.goalProteinGrams,
+    carbsGrams: today.nutrition.goalCarbsGrams,
+    fatGrams: today.nutrition.goalFatGrams,
+    fiberGrams: today.nutrition.goalFiberGrams,
   });
   return <section className="panel nutrition-panel widget-card">
     <header><div><h2><Utensils /> Odżywianie</h2><p>Podsumowanie tego, co zostało zapisane.</p></div><span className="section-link orange">Dzienny bilans</span></header>
@@ -163,7 +160,7 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
       <div className="calorie-goal-copy">
         <strong>{formatMetric(totals.caloriesKcal, 0)}{goalKcal != null ? ` / ${formatMetric(goalKcal, 0)}` : ''} <small>{totals.caloriesKcal == null && goalKcal == null ? '' : 'kcal'}</small></strong>
         {caloriePercent != null && <div className="calorie-goal-progress"><ProgressBar tone="orange" value={caloriePercent} /><span>{caloriePercent}% celu · {calorieDelta! >= 0 ? `${formatMetric(calorieDelta, 0)} kcal zostało` : `${formatMetric(Math.abs(calorieDelta!), 0)} kcal ponad cel`}</span></div>}
-        {goalKcal == null && <small className="calorie-goal-empty">Cel kcal możesz ustawić w Ustawieniach.</small>}
+        {goalKcal == null && <small className="calorie-goal-empty">Cel kcal możesz ustawić w Ustawieniach lub przez Coacha.</small>}
       </div>
       <span>{today.nutrition.summary.entryCount} {today.nutrition.summary.entryCount === 1 ? 'wpis' : 'wpisów'}</span>
     </div>
@@ -200,7 +197,7 @@ function RemainingWeek({ today }: { today: TodayResponse }) {
 
 function CoachPanel({ today }: { today: TodayResponse }) {
   const completion = weekCompletion(today);
-  return <section className="panel coach-panel widget-card widget-wide"><header><div><h2><Brain /> AI Coach</h2><p>Miejsce przygotowane pod integrację DeepSeek.</p></div><Sparkles size={20} /></header><div className="coach-content"><div className="coach-brief"><TrendingUp /><div><strong>{completion >= 70 ? 'Dobry rytm tygodnia' : 'Buduj regularność krok po kroku'}</strong><p>Realizacja planu tygodnia: {completion}%. {today.health?.bodyBattery != null ? `Body Battery: ${today.health.bodyBattery}/100.` : 'Dane regeneracji pojawią się po synchronizacji z Garminem.'}</p></div></div><ul><li>Sprawdź dzisiejszy plan aktywności</li><li>Uzupełniaj posiłki możliwie kompletnie</li><li>Zmiany obciążenia oprzyj o dane regeneracji</li></ul></div></section>;
+  return <section className="panel coach-panel widget-card widget-wide"><header><div><h2><Brain /> AI Coach</h2><p>Coach ma dostęp do bieżących danych i wersjonowanych celów.</p></div><Sparkles size={20} /></header><div className="coach-content"><div className="coach-brief"><TrendingUp /><div><strong>{completion >= 70 ? 'Dobry rytm tygodnia' : 'Buduj regularność krok po kroku'}</strong><p>Realizacja planu tygodnia: {completion}%. {today.health?.bodyBattery != null ? `Body Battery: ${today.health.bodyBattery}/100.` : 'Dane regeneracji pojawią się po synchronizacji z Garminem.'}</p></div></div><ul><li>Sprawdź dzisiejszy plan aktywności</li><li>Uzupełniaj posiłki możliwie kompletnie</li><li>Zmiany obciążenia oprzyj o dane regeneracji</li></ul></div></section>;
 }
 
 function HealthMetrics({ today }: { today: TodayResponse }) {
@@ -217,14 +214,24 @@ function HealthMetrics({ today }: { today: TodayResponse }) {
   </div>;
 }
 
+function LoginGate({ onLogin, error, busy }: { onLogin: (username: string, password: string) => void; error?: string | null; busy: boolean }) {
+  const [username, setUsername] = useState('quendae');
+  const [password, setPassword] = useState('');
+  function submit() {
+    if (!username.trim() || !password || busy) return;
+    onLogin(username.trim(), password);
+  }
+  return <div className="token-page"><div className="token-card login-card"><div className="brand-mark">Q</div><h1>QND Health</h1><p>Zaloguj się do prywatnej aplikacji zdrowotnej.</p>{error && <div className="error-box">{error}</div>}<label><span>Użytkownik</span><input autoFocus autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} /></label><label><span>Hasło</span><input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} /></label><button className="primary" disabled={!username.trim() || !password || busy} onClick={submit}>{busy ? 'Logowanie…' : 'Zaloguj się'}</button><small>Sesja jest przechowywana w bezpiecznym cookie HttpOnly. Tokeny API pozostają wyłącznie dla integracji.</small></div></div>;
+}
+
 function loadWidgetLayout(): TodayWidgetPreference[] {
   try { return normalizeTodayWidgetLayout(JSON.parse(localStorage.getItem(WIDGETS_KEY) ?? 'null')); }
   catch { return defaultTodayWidgetLayout.map(widget => ({ ...widget })); }
 }
 
 export default function App() {
-  const api = useMemo(() => new QndHealthApi(), []);
-  const [sessionState, setSessionState] = useState<SessionState>('checking');
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [date, setDate] = useState(warsawToday);
   const [today, setToday] = useState<TodayResponse | null>(null);
@@ -237,60 +244,41 @@ export default function App() {
   const [showCustomActivity, setShowCustomActivity] = useState(false);
   const [editingNutrition, setEditingNutrition] = useState<NutritionEntry | null>(null);
   const [deletingNutritionId, setDeletingNutritionId] = useState<string | null>(null);
+  const api = useMemo(() => new QndHealthApi(), []);
 
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
     void api.getSession()
-      .then(() => {
-        if (cancelled) return;
-        setAuthError(null);
-        setSessionState('authenticated');
-      })
-      .catch(cause => {
-        if (cancelled) return;
-        if (!(cause instanceof ApiError && cause.status === 401)) {
-          setAuthError(cause instanceof Error ? cause.message : 'Nie udało się sprawdzić sesji.');
-        }
-        setSessionState('anonymous');
-      });
-    return () => { cancelled = true; };
+      .then(() => { if (active) { setAuthenticated(true); setAuthError(null); } })
+      .catch(error => { if (active) { setAuthenticated(false); if (error instanceof ApiError && error.status !== 401) setAuthError(error.message); } });
+    return () => { active = false; };
   }, [api]);
 
   const load = useCallback(async () => {
-    if (sessionState !== 'authenticated') return;
+    if (!authenticated) return;
     setLoading(true); setError(null);
     try { setToday(await api.getToday(date)); }
     catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        setToday(null);
-        setAuthError('Sesja wygasła. Zaloguj się ponownie.');
-        setSessionState('anonymous');
-      } else {
-        setError(e instanceof Error ? e.message : 'Nie udało się wczytać danych');
-      }
+      setError(e instanceof Error ? e.message : 'Nie udało się wczytać danych');
+      if (e instanceof ApiError && e.status === 401) { setAuthenticated(false); setToday(null); }
     }
     finally { setLoading(false); }
-  }, [api, date, sessionState]);
+  }, [api, authenticated, date]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgetLayout)); }, [widgetLayout]);
 
-  async function signIn(username: string, password: string) {
-    setAuthError(null);
-    await api.login(username, password);
-    setToday(null);
-    setError(null);
-    setSessionState('authenticated');
+  async function login(username: string, password: string) {
+    if (authBusy) return;
+    setAuthBusy(true); setAuthError(null);
+    try { await api.login(username, password); setAuthenticated(true); }
+    catch (e) { setAuthError(e instanceof Error ? e.message : 'Logowanie nie powiodło się.'); }
+    finally { setAuthBusy(false); }
   }
 
   async function signOut() {
-    try { await api.logout(); }
-    finally {
-      setToday(null);
-      setError(null);
-      setAuthError(null);
-      setSessionState('anonymous');
-    }
+    try { await api.logout(); } catch { /* local state still signs out */ }
+    setAuthenticated(false); setToday(null); setError(null);
   }
 
   async function mutate(kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) {
@@ -327,8 +315,8 @@ export default function App() {
 
   function setWidgets(next: TodayWidgetPreference[]) { setWidgetLayout(normalizeTodayWidgetLayout(next)); }
 
-  if (sessionState === 'checking') return <div className="token-page"><div className="token-card"><div className="brand-mark">Q</div><h1>QND Health</h1><p>Sprawdzanie sesji…</p></div></div>;
-  if (sessionState === 'anonymous') return <LoginGate onLogin={signIn} error={authError} />;
+  if (authenticated === null) return <div className="loading-card auth-loading">Sprawdzanie sesji…</div>;
+  if (!authenticated) return <LoginGate onLogin={(username, password) => void login(username, password)} error={authError} busy={authBusy} />;
 
   function renderWidget(id: TodayWidgetId) {
     if (!today) return null;
