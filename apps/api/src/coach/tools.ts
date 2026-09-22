@@ -7,6 +7,7 @@ import type { DailyHealthRepository } from '../health/repository.js';
 import type { MeasurementRepository } from '../measurements/repository.js';
 import type { NutritionRepository } from '../nutrition/repository.js';
 import type { PlanRepository, PlanStatus, StoredPlanItem } from '../plans/repository.js';
+import type { ProfileGoalService } from '../profile/goals.js';
 import type { HealthProfileRepository } from '../profile/repository.js';
 import type { DeepSeekToolDefinition } from './deepseek.js';
 
@@ -15,6 +16,7 @@ export interface CoachToolDependencies {
   nutritionRepository?: NutritionRepository;
   measurementRepository?: MeasurementRepository;
   profileRepository?: HealthProfileRepository;
+  profileGoalService?: ProfileGoalService;
   dailyHealthRepository?: DailyHealthRepository;
   completedActivityRepository?: CompletedActivityRepository;
   activityMatchRepository?: ActivityMatchRepository;
@@ -25,6 +27,7 @@ export interface CoachToolContext {
   conversationId: string;
   requestId: string;
   timeZone: string;
+  now?: string;
 }
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -40,6 +43,17 @@ function tool(name: string, description: string, parameters: Record<string, unkn
   return { type: 'function', function: { name, description, parameters } };
 }
 
+const goalToolProperties = {
+  activityFactor: { type: 'number', minimum: 1, maximum: 3 },
+  defaultStepsGoal: { type: 'integer', minimum: 1, maximum: 100000 },
+  dailyCaloriesGoalKcal: { type: ['integer', 'null'], minimum: 1, maximum: 20000 },
+  dailyProteinGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 1000 },
+  dailyCarbsGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 2000 },
+  dailyFatGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 1000 },
+  dailyFiberGoalGrams: { type: ['integer', 'null'], minimum: 1, maximum: 500 },
+  reason: { type: ['string', 'null'], description: 'Krótkie uzasadnienie zmiany celów.' },
+};
+
 export const coachTools: DeepSeekToolDefinition[] = [
   tool('get_today', 'Pobierz znormalizowane dane zdrowotne, plan, aktywności i żywienie dla dnia.', jsonObject({ date: { type: 'string', description: 'YYYY-MM-DD' } }, ['date'])),
   tool('get_progress', 'Pobierz podsumowanie postępu dla zakresu dat.', jsonObject({ from: { type: 'string' }, to: { type: 'string' } }, ['from', 'to'])),
@@ -47,7 +61,7 @@ export const coachTools: DeepSeekToolDefinition[] = [
   tool('list_plans', 'Pobierz zaplanowane cele i aktywności.', jsonObject({ from: { type: 'string' }, to: { type: 'string' } })),
   tool('list_activities', 'Pobierz wykonane aktywności.', jsonObject({ from: { type: 'string' }, to: { type: 'string' } })),
   tool('list_nutrition', 'Pobierz wpisy żywieniowe.', jsonObject({ from: { type: 'string' }, to: { type: 'string' } })),
-  tool('get_profile', 'Pobierz profil i cele użytkownika.', jsonObject({})),
+  tool('get_profile', 'Pobierz profil i cele użytkownika obowiązujące dzisiaj.', jsonObject({})),
   tool('create_plan', 'Dodaj plan, cel lub aktywność do kalendarza.', jsonObject({
     date: { type: 'string' }, kind: { type: 'string', enum: ['workout', 'metric_goal', 'count_goal', 'manual'] }, title: { type: 'string' },
     completionStrategy: { type: 'string', enum: ['metric_auto', 'count_manual', 'activity_link', 'manual'] }, metricKey: { type: ['string', 'null'] },
@@ -64,8 +78,9 @@ export const coachTools: DeepSeekToolDefinition[] = [
   tool('update_nutrition', 'Popraw wskazany wpis żywieniowy.', jsonObject({ entryId: { type: 'string' }, patch: { type: 'object' } }, ['entryId', 'patch'])),
   tool('delete_nutrition', 'Usuń wskazany wpis żywieniowy na wyraźne polecenie użytkownika.', jsonObject({ entryId: { type: 'string' } }, ['entryId'])),
   tool('create_measurement', 'Dodaj ręczny pomiar ciała.', jsonObject({ measuredAt: { type: 'string' }, weightKg: { type: 'number' }, bodyFatPercent: { type: ['number', 'null'] }, bmi: { type: ['number', 'null'] }, muscleMassKg: { type: ['number', 'null'] } }, ['weightKg'])),
-  tool('update_profile', 'Zmień ustawienia profilu i cele.', jsonObject({ patch: { type: 'object' } }, ['patch'])),
-  tool('set_default_step_goal', 'Ustaw domyślny dzienny cel kroków.', jsonObject({ steps: { type: 'integer', minimum: 1 } }, ['steps'])),
+  tool('update_profile', 'Zmień dane profilu. Pola celów są automatycznie zapisywane jako nowa rewizja obowiązująca od dzisiaj.', jsonObject({ patch: { type: 'object' } }, ['patch'])),
+  tool('set_profile_goals', 'Ustaw cele kcal, makro, kroków lub współczynnik aktywności od dzisiaj. Nie zmienia historycznych dni.', jsonObject(goalToolProperties)),
+  tool('set_default_step_goal', 'Ustaw domyślny dzienny cel kroków od dzisiaj.', jsonObject({ steps: { type: 'integer', minimum: 1 } }, ['steps'])),
 ];
 
 function requireDependency<T>(value: T | undefined, name: string): T {
@@ -79,6 +94,17 @@ function rangeSchema() {
 
 function utcDayRange(date: string): { from: string; to: string } {
   return { from: `${date}T00:00:00.000Z`, to: `${date}T23:59:59.999Z` };
+}
+
+function localDate(context: CoachToolContext): string {
+  const now = new Date(context.now ?? new Date().toISOString());
+  if (Number.isNaN(now.getTime())) throw new Error('Invalid Coach context timestamp');
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: context.timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
 }
 
 async function auditMutation(
@@ -147,15 +173,25 @@ const nutritionPatchSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 
-const profilePatchSchema = z.object({
+const goalPatchSchema = z.object({
+  activityFactor: z.number().min(1).max(3).optional(),
+  defaultStepsGoal: z.number().int().min(1).max(100000).optional(),
+  dailyCaloriesGoalKcal: z.number().int().min(1).max(20000).nullable().optional(),
+  dailyProteinGoalGrams: z.number().int().min(1).max(1000).nullable().optional(),
+  dailyCarbsGoalGrams: z.number().int().min(1).max(2000).nullable().optional(),
+  dailyFatGoalGrams: z.number().int().min(1).max(1000).nullable().optional(),
+  dailyFiberGoalGrams: z.number().int().min(1).max(500).nullable().optional(),
+});
+
+const profilePatchSchema = goalPatchSchema.extend({
   dateOfBirth: dateSchema.nullable().optional(),
   sexForBmr: z.enum(['male', 'female']).nullable().optional(),
-  heightCm: z.number().positive().nullable().optional(),
-  activityFactor: z.number().positive().optional(),
-  defaultStepsGoal: z.number().int().positive().optional(),
-  dailyCaloriesGoalKcal: z.number().int().positive().nullable().optional(),
-  dailyProteinGoalGrams: z.number().int().positive().nullable().optional(),
+  heightCm: z.number().positive().max(260).nullable().optional(),
 });
+
+const setGoalsSchema = goalPatchSchema.extend({
+  reason: z.string().trim().min(1).max(500).nullable().optional(),
+}).refine(value => Object.keys(value).some(key => key !== 'reason'), 'At least one goal field is required');
 
 export async function executeCoachTool(
   name: string,
@@ -168,15 +204,16 @@ export async function executeCoachTool(
   if (name === 'get_today') {
     const { date } = z.object({ date: dateSchema }).parse(rawArguments);
     const day = utcDayRange(date);
-    const [health, plans, activities, nutrition, measurements, profile] = await Promise.all([
+    const [health, plans, activities, nutrition, measurements, profile, goals] = await Promise.all([
       deps.dailyHealthRepository?.findByDate(date) ?? null,
       deps.planRepository?.list(date, date) ?? [],
       deps.completedActivityRepository?.list(day.from, day.to) ?? [],
       deps.nutritionRepository?.list(day.from, day.to) ?? [],
       deps.measurementRepository?.list(day.from, day.to) ?? [],
       deps.profileRepository?.get() ?? null,
+      deps.profileGoalService?.resolve(date) ?? null,
     ]);
-    return { date, health, plans, activities, nutrition, latestMeasurement: measurements[0] ?? null, profile };
+    return { date, health, plans, activities, nutrition, latestMeasurement: measurements[0] ?? null, profile: profile ? { ...profile, ...goals } : profile, goals };
   }
 
   if (name === 'get_progress' || name === 'get_history') {
@@ -219,7 +256,12 @@ export async function executeCoachTool(
   }
   if (name === 'get_profile') {
     z.object({}).parse(rawArguments);
-    return requireDependency(deps.profileRepository, 'profileRepository').get();
+    const date = localDate(context);
+    const [profile, goals] = await Promise.all([
+      requireDependency(deps.profileRepository, 'profileRepository').get(),
+      deps.profileGoalService?.resolve(date) ?? null,
+    ]);
+    return profile ? { ...profile, ...goals } : profile;
   }
 
   if (name === 'create_plan') {
@@ -356,20 +398,67 @@ export async function executeCoachTool(
 
   if (name === 'update_profile') {
     const { patch } = z.object({ patch: profilePatchSchema }).parse(rawArguments);
+    const {
+      activityFactor, defaultStepsGoal, dailyCaloriesGoalKcal, dailyProteinGoalGrams,
+      dailyCarbsGoalGrams, dailyFatGoalGrams, dailyFiberGoalGrams,
+      ...demographicPatch
+    } = patch;
+    const goalPatch = {
+      ...(activityFactor !== undefined ? { activityFactor } : {}),
+      ...(defaultStepsGoal !== undefined ? { defaultStepsGoal } : {}),
+      ...(dailyCaloriesGoalKcal !== undefined ? { dailyCaloriesGoalKcal } : {}),
+      ...(dailyProteinGoalGrams !== undefined ? { dailyProteinGoalGrams } : {}),
+      ...(dailyCarbsGoalGrams !== undefined ? { dailyCarbsGoalGrams } : {}),
+      ...(dailyFatGoalGrams !== undefined ? { dailyFatGoalGrams } : {}),
+      ...(dailyFiberGoalGrams !== undefined ? { dailyFiberGoalGrams } : {}),
+    };
+
     const repo = requireDependency(deps.profileRepository, 'profileRepository');
     const before = await repo.get();
-    const after = await repo.upsert(patch);
-    await auditMutation(deps, context, 'profile.update', 'health_profile', 'default', { before, after });
-    return after;
+    let after = before;
+    if (Object.keys(demographicPatch).length > 0) {
+      after = await repo.upsert(demographicPatch);
+      await auditMutation(deps, context, 'profile.update', 'health_profile', 'default', { before, after });
+    }
+    let goals = null;
+    if (Object.keys(goalPatch).length > 0) {
+      const goalService = requireDependency(deps.profileGoalService, 'profileGoalService');
+      goals = await goalService.createRevision(goalPatch, {
+        effectiveFrom: localDate(context),
+        source: 'coach',
+        sourceRef: context.conversationId,
+        reason: 'Zmiana celów przez Coacha',
+      });
+      await auditMutation(deps, context, 'profile.goals.revise', 'profile_goal_revision', goals.id, { after: goals });
+    }
+    return after ? { ...after, ...goals } : goals;
+  }
+
+  if (name === 'set_profile_goals') {
+    const parsed = setGoalsSchema.parse(rawArguments);
+    const { reason = null, ...patch } = parsed;
+    const goalService = requireDependency(deps.profileGoalService, 'profileGoalService');
+    const revision = await goalService.createRevision(patch, {
+      effectiveFrom: localDate(context),
+      source: 'coach',
+      sourceRef: context.conversationId,
+      reason,
+    });
+    await auditMutation(deps, context, 'profile.goals.revise', 'profile_goal_revision', revision.id, { after: revision });
+    return revision;
   }
 
   if (name === 'set_default_step_goal') {
     const { steps } = z.object({ steps: z.number().int().positive() }).parse(rawArguments);
-    const repo = requireDependency(deps.profileRepository, 'profileRepository');
-    const before = await repo.get();
-    const after = await repo.upsert({ defaultStepsGoal: steps });
-    await auditMutation(deps, context, 'profile.set_default_step_goal', 'health_profile', 'default', { before, after });
-    return after;
+    const goalService = requireDependency(deps.profileGoalService, 'profileGoalService');
+    const revision = await goalService.createRevision({ defaultStepsGoal: steps }, {
+      effectiveFrom: localDate(context),
+      source: 'coach',
+      sourceRef: context.conversationId,
+      reason: 'Zmiana celu kroków przez Coacha',
+    });
+    await auditMutation(deps, context, 'profile.goals.revise', 'profile_goal_revision', revision.id, { after: revision });
+    return revision;
   }
 
   throw new Error(`Unknown Coach tool: ${name}`);
