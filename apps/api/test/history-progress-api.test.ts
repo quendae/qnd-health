@@ -88,7 +88,7 @@ const nutritionRepository = {
 
 const profileRepository = {
   async get() {
-    return { id: 'default', dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: 2200, dailyProteinGoalGrams: 160 };
+    return { id: 'default' as const, dateOfBirth: null, sexForBmr: null, heightCm: null, activityFactor: 1.2, defaultStepsGoal: 7500, dailyCaloriesGoalKcal: 2200, dailyProteinGoalGrams: 160 };
   },
   async upsert() { throw new Error('not used'); },
 };
