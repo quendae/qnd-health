@@ -1,56 +1,72 @@
-import { useState, type FormEvent } from 'react';
-import { Database, HeartPulse, LockKeyhole, Settings, Watch } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Brain, Database, HeartPulse, Settings, Watch } from 'lucide-react';
 import type { QndHealthApi } from './api';
 import { ProfileSettings } from './ProfileSettings';
 import type { EnergyEstimate } from './types';
 
 const datasets = ['Aktywności', 'Kroki', 'Sen', 'Tętno', 'HRV', 'Body Battery', 'Stres', 'Waga'];
-const WEB_TOKEN_KEY = 'qnd-health.web-token';
-
-function browserHasWebToken(): boolean {
-  return typeof sessionStorage !== 'undefined' && Boolean(sessionStorage.getItem(WEB_TOKEN_KEY));
-}
-
-function saveBrowserWebToken(token: string): void {
-  sessionStorage.setItem(WEB_TOKEN_KEY, token);
-  window.location.reload();
-}
-
-function clearBrowserWebToken(): void {
-  sessionStorage.removeItem(WEB_TOKEN_KEY);
-  window.location.reload();
-}
 
 export function SettingsView({
   api,
   energy,
   onSaved,
   onError,
-  hasWebToken,
-  onSaveWebToken,
-  onClearWebToken,
 }: {
   api: QndHealthApi;
   energy: EnergyEstimate | null;
   onSaved: () => void | Promise<void>;
   onError: (message: string) => void;
-  hasWebToken?: boolean;
-  onSaveWebToken?: (token: string) => void;
-  onClearWebToken?: () => void;
 }) {
-  const [tokenDraft, setTokenDraft] = useState('');
-  const tokenStored = hasWebToken ?? browserHasWebToken();
+  const [promptDraft, setPromptDraft] = useState('');
+  const [promptLoaded, setPromptLoaded] = useState(false);
+  const [promptIsDefault, setPromptIsDefault] = useState(true);
+  const [savingPrompt, setSavingPrompt] = useState(false);
 
-  function submitToken(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    let cancelled = false;
+    void api.getCoachSettings()
+      .then(settings => {
+        if (cancelled) return;
+        setPromptDraft(settings.systemPrompt);
+        setPromptIsDefault(settings.isDefault);
+        setPromptLoaded(true);
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setPromptLoaded(true);
+        onError(error instanceof Error ? error.message : 'Nie udało się wczytać promptu Coacha.');
+      });
+    return () => { cancelled = true; };
+  }, [api, onError]);
+
+  async function savePrompt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const value = tokenDraft.trim();
-    if (!value) return;
-    (onSaveWebToken ?? saveBrowserWebToken)(value);
-    setTokenDraft('');
+    const value = promptDraft.trim();
+    if (!value || savingPrompt) return;
+    setSavingPrompt(true);
+    try {
+      const settings = await api.updateCoachSettings(value);
+      setPromptDraft(settings.systemPrompt);
+      setPromptIsDefault(settings.isDefault);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Nie udało się zapisać promptu Coacha.');
+    } finally {
+      setSavingPrompt(false);
+    }
   }
 
-  function clearToken() {
-    (onClearWebToken ?? clearBrowserWebToken)();
+  async function resetPrompt() {
+    if (savingPrompt) return;
+    setSavingPrompt(true);
+    try {
+      const settings = await api.updateCoachSettings(null);
+      setPromptDraft(settings.systemPrompt);
+      setPromptIsDefault(settings.isDefault);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Nie udało się przywrócić domyślnego promptu Coacha.');
+    } finally {
+      setSavingPrompt(false);
+    }
   }
 
   return <section className="settings-view">
@@ -65,35 +81,34 @@ export function SettingsView({
         <div className="settings-note"><HeartPulse size={16} /><span>Widoki Dzisiaj, Historia i Postępy są już przygotowane na te dane. Po włączeniu synchronizacji nie będzie potrzebna przebudowa UI.</span></div>
       </article>
 
-      <article className="panel settings-card">
-        <header><div className="settings-icon"><Database /></div><div><h2>Dane</h2><p>SQLite na Twoim serwerze</p></div></header>
-        <p className="settings-copy">Dane aplikacji pozostają w lokalnej bazie QND Health. Integracje dostają tylko zakres dostępu wynikający z ich tokenu API.</p>
-      </article>
-
-      <article className="panel settings-card api-access-card">
+      <article className="panel settings-card coach-prompt-card">
         <header>
-          <div className="settings-icon"><LockKeyhole /></div>
-          <div><h2>Dostęp API</h2><p>Web i Hermes mają oddzielne tokeny</p></div>
-          <span className={`provider-status ${tokenStored ? 'connected' : 'pending'}`}><i /> {tokenStored ? 'Token zapisany' : 'Brak tokenu'}</span>
+          <div className="settings-icon"><Brain /></div>
+          <div><h2>Główny prompt Coacha</h2><p>Instrukcja systemowa używana przy każdej rozmowie</p></div>
+          <span className={`provider-status ${promptIsDefault ? 'pending' : 'connected'}`}><i /> {promptIsDefault ? 'Domyślny' : 'Własny'}</span>
         </header>
-        <p className="settings-copy">Token web jest przechowywany wyłącznie w <code>sessionStorage</code> tej przeglądarki. Aktualnego sekretu nie pokazujemy ponownie.</p>
-        <form className="api-token-form" onSubmit={submitToken}>
+        <p className="settings-copy">Możesz zmienić sposób pracy, ton i priorytety Coacha. Zapisany prompt zacznie obowiązywać od następnej wiadomości i jest przechowywany w lokalnej bazie QND Health.</p>
+        <form className="coach-prompt-form" onSubmit={savePrompt}>
           <label>
-            <span>Token web tej sesji</span>
-            <input
-              type="password"
-              autoComplete="off"
-              placeholder="Wklej nowy token qndh_…"
-              value={tokenDraft}
-              onChange={event => setTokenDraft(event.target.value)}
+            <span>Prompt systemowy</span>
+            <textarea
+              rows={14}
+              value={promptDraft}
+              disabled={!promptLoaded || savingPrompt}
+              placeholder={promptLoaded ? 'Wpisz główny prompt Coacha…' : 'Wczytywanie promptu…'}
+              onChange={event => setPromptDraft(event.target.value)}
             />
           </label>
-          <div className="api-token-actions">
-            <button className="primary" type="submit" disabled={!tokenDraft.trim()}>Zapisz token</button>
-            <button className="ghost" type="button" onClick={clearToken} disabled={!tokenStored}>Wyczyść</button>
+          <div className="coach-prompt-actions">
+            <button className="primary" type="submit" disabled={!promptLoaded || !promptDraft.trim() || savingPrompt}>Zapisz prompt</button>
+            <button className="ghost" type="button" onClick={() => void resetPrompt()} disabled={!promptLoaded || promptIsDefault || savingPrompt}>Przywróć domyślny</button>
           </div>
         </form>
-        <small className="api-token-note">Po zapisaniu tokenu aplikacja odświeży sesję i zacznie używać nowych zakresów, w tym <code>coach:read</code> i <code>coach:write</code>.</small>
+      </article>
+
+      <article className="panel settings-card">
+        <header><div className="settings-icon"><Database /></div><div><h2>Dane i dostęp</h2><p>SQLite + lokalna sesja webowa</p></div></header>
+        <p className="settings-copy">Dane aplikacji pozostają w lokalnej bazie QND Health. Przeglądarka loguje się lokalnym kontem i bezpiecznym cookie sesyjnym, a Hermes i inne integracje nadal używają osobnych tokenów API z ograniczonymi zakresami.</p>
       </article>
 
       <article className="panel settings-card">
