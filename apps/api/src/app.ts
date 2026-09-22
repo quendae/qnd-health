@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { ApiTokenRepository } from './auth/service.js';
 import { createRequestAuthorizer } from './auth/service.js';
+import { registerWebAuthRoutes } from './auth/web-routes.js';
 import { installErrorHandler } from './http/errors.js';
 import type { PlanRepository } from './plans/repository.js';
 import { registerPlanRoutes } from './plans/routes.js';
@@ -16,6 +17,7 @@ import { registerActivityRoutes } from './activities/routes.js';
 import type { HealthProfileRepository } from './profile/repository.js';
 import { registerProfileRoutes } from './profile/routes.js';
 import type { CoachRepository } from './coach/repository.js';
+import type { CoachSettingsRepository } from './coach/settings.js';
 import { registerCoachRoutes, type CoachTurnProvider } from './coach/routes.js';
 import { registerTodayRoutes } from './today/routes.js';
 import { registerInsightRoutes } from './insights/routes.js';
@@ -28,6 +30,8 @@ import { openApiDocument } from './openapi.js';
 export interface BuildAppOptions {
   tokenPepper?: string;
   tokenRepository?: ApiTokenRepository;
+  webUsername?: string;
+  webPassword?: string | null;
   planRepository?: PlanRepository;
   nutritionRepository?: NutritionRepository;
   measurementRepository?: MeasurementRepository;
@@ -36,6 +40,7 @@ export interface BuildAppOptions {
   completedActivityRepository?: CompletedActivityRepository;
   activityMatchRepository?: ActivityMatchRepository;
   coachRepository?: CoachRepository;
+  coachSettingsRepository?: CoachSettingsRepository;
   deepseekClient?: CoachTurnProvider | null;
   coachModel?: string;
   auditRepository?: AuditRepository;
@@ -49,8 +54,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.get('/api/v1/health', async () => ({ status: 'ok' as const }));
   app.get('/api/openapi.json', async () => openApiDocument);
 
+  const webUsername = options.webUsername ?? 'quendae';
+  if (options.tokenPepper) {
+    registerWebAuthRoutes(app, {
+      username: webUsername,
+      password: options.webPassword ?? null,
+      sessionSecret: options.tokenPepper,
+    });
+  }
+
   const authorizer = options.tokenPepper && options.tokenRepository
-    ? createRequestAuthorizer(options.tokenRepository, options.tokenPepper)
+    ? createRequestAuthorizer(
+      options.tokenRepository,
+      options.tokenPepper,
+      { username: webUsername, secret: options.tokenPepper },
+    )
     : null;
   const auditRepository = options.auditRepository ?? noopAuditRepository;
   const idempotencyRepository = options.idempotencyRepository ?? noopIdempotencyRepository;
@@ -97,6 +115,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerCoachRoutes(app, {
       authorizer,
       coachRepository: options.coachRepository,
+      coachSettingsRepository: options.coachSettingsRepository,
       deepseekClient: options.deepseekClient ?? null,
       coachModel: options.coachModel ?? 'deepseek-flash',
       planRepository: options.planRepository,
