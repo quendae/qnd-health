@@ -41,17 +41,27 @@ export type NutritionPatchInput = Partial<Pick<NutritionEntry,
 
 export type HealthProfilePatch = Partial<Omit<HealthProfile, 'id'>>;
 
+export interface WebSession {
+  authenticated: true;
+  username: string;
+}
+
+export interface CoachSettings {
+  systemPrompt: string;
+  isDefault: boolean;
+}
+
 export class QndHealthApi {
-  constructor(private readonly token: string) {}
+  constructor(private readonly token?: string) {}
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set('Authorization', `Bearer ${this.token}`);
+    if (this.token) headers.set('Authorization', `Bearer ${this.token}`);
     if (init.body) headers.set('Content-Type', 'application/json');
     if (init.method && init.method !== 'GET' && init.method !== 'HEAD') {
       headers.set('Idempotency-Key', crypto.randomUUID());
     }
-    const response = await fetch(path, { ...init, headers });
+    const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
     if (!response.ok) {
       let data: unknown = null;
       try { data = await response.json(); } catch { data = null; }
@@ -59,6 +69,20 @@ export class QndHealthApi {
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
+  }
+
+  getSession() {
+    return this.request<WebSession>('/api/v1/auth/session');
+  }
+
+  login(username: string, password: string) {
+    return this.request<{ username: string }>('/api/v1/auth/login', {
+      method: 'POST', body: JSON.stringify({ username, password }),
+    });
+  }
+
+  logout() {
+    return this.request<void>('/api/v1/auth/logout', { method: 'POST' });
   }
 
   getToday(date: string) {
@@ -146,6 +170,16 @@ export class QndHealthApi {
   sendCoachMessage(conversationId: string, content: string) {
     return this.request<CoachTurnResponse>(`/api/v1/coach/conversations/${encodeURIComponent(conversationId)}/messages`, {
       method: 'POST', body: JSON.stringify({ content }),
+    });
+  }
+
+  getCoachSettings() {
+    return this.request<CoachSettings>('/api/v1/coach/settings');
+  }
+
+  updateCoachSettings(systemPrompt: string | null) {
+    return this.request<CoachSettings>('/api/v1/coach/settings', {
+      method: 'PATCH', body: JSON.stringify({ systemPrompt }),
     });
   }
 }
