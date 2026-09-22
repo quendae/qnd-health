@@ -10,6 +10,8 @@ const prisma = createPrismaClient(config.databaseUrl);
 const app = buildRuntimeApp({
   prisma,
   tokenPepper: config.tokenPepper,
+  webUsername: config.webUsername,
+  webPassword: config.webPassword,
   timeZone: config.timeZone,
   deepseekApiKey: config.deepseekApiKey,
   deepseekBaseUrl: config.deepseekBaseUrl,
