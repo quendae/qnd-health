@@ -105,12 +105,13 @@ export function registerProfileRoutes(app: FastifyInstance, deps: {
         let goals = deps.profileGoalService ? await deps.profileGoalService.resolve(today) : null;
         if (Object.keys(goalPatch).length > 0) {
           if (deps.profileGoalService) {
-            goals = await deps.profileGoalService.createRevision(goalPatch, {
+            const revision = await deps.profileGoalService.createRevision(goalPatch, {
               effectiveFrom: today,
               source: 'manual',
               sourceRef: null,
               reason: 'Zmiana w Ustawieniach',
             });
+            goals = { ...revision, revisionId: revision.id };
           } else {
             // Compatibility for isolated route tests/embedders without the revision service.
             await deps.profileRepository.upsert(goalPatch as HealthProfilePatch);
@@ -127,7 +128,7 @@ export function registerProfileRoutes(app: FastifyInstance, deps: {
             before,
             after: body,
             goalEffectiveFrom: goals?.effectiveFrom ?? null,
-            goalRevisionId: goals?.revisionId ?? (goals && 'id' in goals ? goals.id : null),
+            goalRevisionId: goals?.revisionId ?? null,
           },
         };
       },
