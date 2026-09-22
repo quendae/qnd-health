@@ -76,7 +76,7 @@ describe('Today view model', () => {
 
     const insight = todayCoachInsights(today);
     expect(insight.headline).toContain('70%');
-    expect(insight.summary).toContain('6 200 / 8 000');
+    expect(insight.summary).toContain('6200 / 8000');
     expect(insight.items.join(' ')).toContain('500 kcal');
     expect(insight.items.join(' ')).toContain('105 / 170 g');
     expect(insight.items.join(' ')).toContain('7 h 25 min');
