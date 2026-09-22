@@ -4,7 +4,7 @@ import { SettingsView } from './SettingsView';
 import type { QndHealthApi } from './api';
 
 describe('SettingsView', () => {
-  it('renders session web token replacement controls without exposing the current token', () => {
+  it('shows editable Coach prompt settings and no longer exposes browser web-token controls', () => {
     const api = {} as QndHealthApi;
     const html = renderToStaticMarkup(
       <SettingsView
@@ -12,16 +12,13 @@ describe('SettingsView', () => {
         energy={null}
         onSaved={() => undefined}
         onError={() => undefined}
-        hasWebToken
-        onSaveWebToken={() => undefined}
-        onClearWebToken={() => undefined}
       />,
     );
 
-    expect(html).toContain('Token web tej sesji');
-    expect(html).toContain('Wklej nowy token');
-    expect(html).toContain('Zapisz token');
-    expect(html).toContain('Wyczyść');
-    expect(html).toContain('Token zapisany');
+    expect(html).toContain('Główny prompt Coacha');
+    expect(html).toContain('Przywróć domyślny');
+    expect(html).toContain('Zapisz prompt');
+    expect(html).not.toContain('Token web tej sesji');
+    expect(html).not.toContain('Wklej nowy token');
   });
 });
