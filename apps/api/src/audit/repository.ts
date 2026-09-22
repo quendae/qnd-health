@@ -1,5 +1,5 @@
 export interface AuditEventInput {
-  actorType: 'api_token' | 'coach';
+  actorType: 'api_token' | 'web_session' | 'coach';
   apiTokenId?: string | null;
   action: string;
   entityType: string;
