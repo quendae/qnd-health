@@ -73,8 +73,9 @@ async function buildCurrentContext(deps: CoachRouteDependencies) {
   const todayRange = dayTimestampRange(date);
   const range30 = { from: `${from30}T00:00:00.000Z`, to: `${date}T23:59:59.999Z` };
 
-  const [profile, health, plans, activities, nutrition, measurements, health30] = await Promise.all([
+  const [profile, resolvedGoals, health, plans, activities, nutrition, measurements, health30] = await Promise.all([
     deps.profileRepository?.get() ?? null,
+    deps.profileGoalService?.resolve(date) ?? null,
     deps.dailyHealthRepository?.findByDate(date) ?? null,
     deps.planRepository?.list(from30, shiftDate(date, 7)) ?? [],
     deps.completedActivityRepository?.list(range30.from, range30.to) ?? [],
@@ -82,6 +83,17 @@ async function buildCurrentContext(deps: CoachRouteDependencies) {
     deps.measurementRepository?.list(range30.from, range30.to) ?? [],
     deps.dailyHealthRepository?.list(from30, date) ?? [],
   ]);
+
+  const goals = resolvedGoals ?? {
+    activityFactor: profile?.activityFactor ?? 1.2,
+    defaultStepsGoal: profile?.defaultStepsGoal ?? 7500,
+    dailyCaloriesGoalKcal: profile?.dailyCaloriesGoalKcal ?? null,
+    dailyProteinGoalGrams: profile?.dailyProteinGoalGrams ?? null,
+    dailyCarbsGoalGrams: null,
+    dailyFatGoalGrams: null,
+    dailyFiberGoalGrams: null,
+  };
+  const currentProfile = profile ? { ...profile, ...goals } : profile;
 
   const todayNutrition = nutrition.filter(entry => entry.consumedAt >= todayRange.from && entry.consumedAt <= todayRange.to);
   const sumPresent = (values: Array<number | null>) => {
@@ -116,13 +128,26 @@ async function buildCurrentContext(deps: CoachRouteDependencies) {
 
   return buildCoachContext({
     date,
-    profile,
+    profile: currentProfile,
+    goalRevision: resolvedGoals ? {
+      id: resolvedGoals.revisionId,
+      effectiveFrom: resolvedGoals.effectiveFrom,
+      source: resolvedGoals.source,
+      reason: resolvedGoals.reason,
+    } : null,
     today: {
       health,
       latestMeasurement: measurements[0] ?? null,
       energy: null,
-      activity: { steps: { current: health?.steps ?? 0, target: health?.stepsGoal ?? profile?.defaultStepsGoal ?? 7500, goalSource: health?.stepsGoal != null ? 'garmin' : profile ? 'profile' : 'fallback' } },
-      nutrition: { goalKcal: profile?.dailyCaloriesGoalKcal ?? null, summary: { totals: todayTotals } },
+      activity: { steps: { current: health?.steps ?? 0, target: health?.stepsGoal ?? goals.defaultStepsGoal, goalSource: health?.stepsGoal != null ? 'garmin' : 'profile' } },
+      nutrition: {
+        goalKcal: goals.dailyCaloriesGoalKcal,
+        goalProteinGrams: goals.dailyProteinGoalGrams,
+        goalCarbsGrams: goals.dailyCarbsGoalGrams,
+        goalFatGrams: goals.dailyFatGoalGrams,
+        goalFiberGrams: goals.dailyFiberGoalGrams,
+        summary: { totals: todayTotals },
+      },
     },
     plans,
     activities,
@@ -178,6 +203,7 @@ async function runTurn(
         conversationId,
         requestId,
         timeZone: deps.timeZone,
+        now: new Date().toISOString(),
       });
       const action: CoachActionSummary = { toolCallId: call.id, name: call.name, status: 'completed', result };
       actions.push(action);
