@@ -9,6 +9,7 @@ import { CustomActivityDialog } from './CustomActivityDialog';
 import { NutritionEntryDialog } from './NutritionEntryDialog';
 import { CoachView } from './CoachView';
 import { HistoryView } from './HistoryView';
+import { LoginGate } from './LoginGate';
 import { Planner } from './Planner';
 import { ProgressView } from './ProgressView';
 import { SettingsView } from './SettingsView';
@@ -19,7 +20,6 @@ import { formatMetric } from './format-number';
 import { dateLabel, formatDistance, formatDuration, greeting, nutritionMacroCards, nutritionMealListClass, progressPercent, shortDateLabel, weekCompletion } from './view-model';
 import { defaultTodayWidgetLayout, normalizeTodayWidgetLayout, type TodayWidgetId, type TodayWidgetPreference } from './widget-layout';
 
-const TOKEN_KEY = 'qnd-health.web-token';
 const WIDGETS_KEY = 'qnd-health.today-widgets';
 const navItems = [
   ['today', 'Dzisiaj', LayoutDashboard], ['planner', 'Plan', CalendarDays], ['history', 'Historia', History],
@@ -27,6 +27,7 @@ const navItems = [
 ] as const;
 
 type Section = typeof navItems[number][0];
+type SessionState = 'checking' | 'authenticated' | 'anonymous';
 
 function warsawToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -150,7 +151,12 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
     ? Math.round((totals.caloriesKcal / goalKcal) * 100)
     : null;
   const calorieDelta = totals.caloriesKcal != null && goalKcal != null ? goalKcal - totals.caloriesKcal : null;
-  const macro = nutritionMacroCards(totals, goalProtein);
+  const macro = nutritionMacroCards(totals, {
+    proteinGrams: goalProtein,
+    carbsGrams: null,
+    fatGrams: null,
+    fiberGrams: null,
+  });
   return <section className="panel nutrition-panel widget-card">
     <header><div><h2><Utensils /> Odżywianie</h2><p>Podsumowanie tego, co zostało zapisane.</p></div><span className="section-link orange">Dzienny bilans</span></header>
     <div className="calorie-head calorie-goal-head">
@@ -164,7 +170,7 @@ function NutritionPanel({ today, onEdit, onDelete, deletingId }: {
     <div className="macros">{macro.map(item => <div className={`macro-card ${item.goal != null ? 'with-goal' : ''}`} key={item.label}>
       <span>{item.label}</span>
       <strong>{item.value == null ? '—' : item.goal != null ? `${formatMetric(item.value)} / ${formatMetric(item.goal, 0)} g` : `${formatMetric(item.value)} g`}</strong>
-      {item.goal != null && (item.percent == null ? <small>Brak danych o białku</small> : <><ProgressBar value={item.percent} /><small>{item.percent}% celu</small></>)}
+      {item.goal != null && (item.percent == null ? <small>Brak danych o makro</small> : <><ProgressBar value={item.percent} /><small>{item.percent}% celu</small></>)}
     </div>)}</div>
     <div className="meals-head"><h3>Dzisiejsze wpisy</h3></div>
     <div className={nutritionMealListClass(today.nutrition.entries.length)}>
@@ -211,18 +217,15 @@ function HealthMetrics({ today }: { today: TodayResponse }) {
   </div>;
 }
 
-function TokenGate({ onSave, error }: { onSave: (token: string) => void; error?: string | null }) {
-  const [token, setToken] = useState('');
-  return <div className="token-page"><div className="token-card"><div className="brand-mark">Q</div><h1>QND Health</h1><p>Twoja prywatna aplikacja zdrowotna działa. Wprowadź token web dla tej sesji przeglądarki.</p>{error && <div className="error-box">{error}</div>}<input autoFocus type="password" placeholder="qndh_…" value={token} onChange={e => setToken(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && token.trim()) onSave(token.trim()); }} /><button className="primary" disabled={!token.trim()} onClick={() => onSave(token.trim())}>Otwórz aplikację</button><small>Token jest przechowywany tylko w sessionStorage i znika po wylogowaniu.</small></div></div>;
-}
-
 function loadWidgetLayout(): TodayWidgetPreference[] {
   try { return normalizeTodayWidgetLayout(JSON.parse(localStorage.getItem(WIDGETS_KEY) ?? 'null')); }
   catch { return defaultTodayWidgetLayout.map(widget => ({ ...widget })); }
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) ?? '');
+  const api = useMemo(() => new QndHealthApi(), []);
+  const [sessionState, setSessionState] = useState<SessionState>('checking');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [date, setDate] = useState(warsawToday);
   const [today, setToday] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -234,21 +237,63 @@ export default function App() {
   const [showCustomActivity, setShowCustomActivity] = useState(false);
   const [editingNutrition, setEditingNutrition] = useState<NutritionEntry | null>(null);
   const [deletingNutritionId, setDeletingNutritionId] = useState<string | null>(null);
-  const api = useMemo(() => token ? new QndHealthApi(token) : null, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getSession()
+      .then(() => {
+        if (cancelled) return;
+        setAuthError(null);
+        setSessionState('authenticated');
+      })
+      .catch(cause => {
+        if (cancelled) return;
+        if (!(cause instanceof ApiError && cause.status === 401)) {
+          setAuthError(cause instanceof Error ? cause.message : 'Nie udało się sprawdzić sesji.');
+        }
+        setSessionState('anonymous');
+      });
+    return () => { cancelled = true; };
+  }, [api]);
 
   const load = useCallback(async () => {
-    if (!api) return;
+    if (sessionState !== 'authenticated') return;
     setLoading(true); setError(null);
     try { setToday(await api.getToday(date)); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Nie udało się wczytać danych'); if (e instanceof ApiError && e.status === 401) setToday(null); }
+    catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        setToday(null);
+        setAuthError('Sesja wygasła. Zaloguj się ponownie.');
+        setSessionState('anonymous');
+      } else {
+        setError(e instanceof Error ? e.message : 'Nie udało się wczytać danych');
+      }
+    }
     finally { setLoading(false); }
-  }, [api, date]);
+  }, [api, date, sessionState]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgetLayout)); }, [widgetLayout]);
 
+  async function signIn(username: string, password: string) {
+    setAuthError(null);
+    await api.login(username, password);
+    setToday(null);
+    setError(null);
+    setSessionState('authenticated');
+  }
+
+  async function signOut() {
+    try { await api.logout(); }
+    finally {
+      setToday(null);
+      setError(null);
+      setAuthError(null);
+      setSessionState('anonymous');
+    }
+  }
+
   async function mutate(kind: 'progress' | 'attach' | 'detach', item: PlanItem, value?: number | string) {
-    if (!api) return;
     setBusyId(item.id); setError(null);
     try {
       if (kind === 'progress') await api.updateProgress(item.id, Number(value));
@@ -260,7 +305,7 @@ export default function App() {
   }
 
   async function deleteActivityPlan(item: PlanItem) {
-    if (!api || busyId) return;
+    if (busyId) return;
     if (!window.confirm(`Usunąć aktywność „${item.title}”?`)) return;
     setBusyId(item.id); setError(null);
     try { await api.deletePlan(item.id); await load(); }
@@ -269,7 +314,7 @@ export default function App() {
   }
 
   async function deleteNutrition(entry: NutritionEntry) {
-    if (!api || deletingNutritionId) return;
+    if (deletingNutritionId) return;
     if (!window.confirm(`Usunąć wpis „${entry.title}”?`)) return;
     setDeletingNutritionId(entry.id); setError(null);
     try {
@@ -280,15 +325,13 @@ export default function App() {
     finally { setDeletingNutritionId(null); }
   }
 
-  function saveToken(value: string) { sessionStorage.setItem(TOKEN_KEY, value); setToken(value); }
-  function signOut() { sessionStorage.removeItem(TOKEN_KEY); setToken(''); setToday(null); }
   function setWidgets(next: TodayWidgetPreference[]) { setWidgetLayout(normalizeTodayWidgetLayout(next)); }
 
-  if (!token) return <TokenGate onSave={saveToken} />;
-  if (!today && error) return <TokenGate onSave={saveToken} error={error} />;
+  if (sessionState === 'checking') return <div className="token-page"><div className="token-card"><div className="brand-mark">Q</div><h1>QND Health</h1><p>Sprawdzanie sesji…</p></div></div>;
+  if (sessionState === 'anonymous') return <LoginGate onLogin={signIn} error={authError} />;
 
   function renderWidget(id: TodayWidgetId) {
-    if (!today || !api) return null;
+    if (!today) return null;
     if (id === 'health_metrics') return <HealthMetrics today={today} />;
     if (id === 'activity') return <ActivityPanel today={today} mutate={mutate} busyId={busyId} onAddActivity={() => setShowCustomActivity(true)} onDelete={(item) => void deleteActivityPlan(item)} />;
     if (id === 'nutrition') return <NutritionPanel today={today} onEdit={setEditingNutrition} onDelete={(entry) => void deleteNutrition(entry)} deletingId={deletingNutritionId} />;
@@ -298,23 +341,23 @@ export default function App() {
   }
 
   let content = null;
-  if (section === 'planner' && api) content = <Planner api={api} selectedDate={date} onError={setError} />;
-  else if (section === 'history' && api) content = <HistoryView api={api} selectedDate={date} onError={setError} />;
-  else if (section === 'progress' && api) content = <ProgressView api={api} selectedDate={date} onError={setError} />;
-  else if (section === 'settings' && api) content = <SettingsView api={api} energy={today?.energy ?? null} onSaved={load} onError={setError} />;
-  else if (section === 'coach' && api) content = <CoachView api={api} onError={setError} />;
+  if (section === 'planner') content = <Planner api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'history') content = <HistoryView api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'progress') content = <ProgressView api={api} selectedDate={date} onError={setError} />;
+  else if (section === 'settings') content = <SettingsView api={api} energy={today?.energy ?? null} onSaved={load} onError={setError} />;
+  else if (section === 'coach') content = <CoachView api={api} onError={setError} />;
   else if (!today) content = <div className="loading-card">Wczytywanie QND Health…</div>;
   else content = <div className="today-widgets">{widgetLayout.filter(widget => widget.visible).map(widget => <div className={`widget-slot widget-${widget.id}`} key={widget.id}>{renderWidget(widget.id)}</div>)}</div>;
 
   return <div className="app-shell">
     <aside className="sidebar"><div className="logo"><div className="logo-symbol">Q</div><div><strong>QND Health</strong><span>Ruch · Odżywianie · Postęp</span></div></div><nav>{navItems.map(([id, label, Icon]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><Icon size={19} /> {label}</button>)}</nav><div className="privacy"><Sparkles size={16} /><div><strong>Prywatne. Twoje.</strong><span>Self-hosted. Dane zostają u Ciebie.</span></div></div></aside>
     <main>
-      {section === 'today' && <div className="topline"><div><span className="eyebrow">{greeting()}</span><div className="date-row"><h1>{dateLabel(date)}</h1><button className="icon-button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Poprzedni dzień"><ChevronLeft /></button><button className="icon-button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Następny dzień"><ChevronRight /></button></div></div><div className="top-actions"><button className="ghost" onClick={() => setShowWidgetSettings(true)}><SlidersHorizontal size={16} /> Dostosuj widok</button><button className="ghost" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16} /> Synchronizuj</button><span className={`connection ${today?.health ? 'connected' : ''}`}><i /> {today?.health ? 'Dane Garmin' : 'Brak danych Garmin'}</span><button className="icon-button" title="Wyloguj" onClick={signOut}><LogOut size={17} /></button></div></div>}
+      {section === 'today' && <div className="topline"><div><span className="eyebrow">{greeting()}</span><div className="date-row"><h1>{dateLabel(date)}</h1><button className="icon-button" onClick={() => setDate(shiftDate(date, -1))} aria-label="Poprzedni dzień"><ChevronLeft /></button><button className="icon-button" onClick={() => setDate(shiftDate(date, 1))} aria-label="Następny dzień"><ChevronRight /></button></div></div><div className="top-actions"><button className="ghost" onClick={() => setShowWidgetSettings(true)}><SlidersHorizontal size={16} /> Dostosuj widok</button><button className="ghost" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16} /> Synchronizuj</button><span className={`connection ${today?.health ? 'connected' : ''}`}><i /> {today?.health ? 'Dane Garmin' : 'Brak danych Garmin'}</span><button className="icon-button" title="Wyloguj" onClick={() => void signOut()}><LogOut size={17} /></button></div></div>}
       {error && <div className="error-banner">{error}</div>}
       {content}
     </main>
     {showWidgetSettings && <WidgetSettings layout={widgetLayout} onChange={setWidgets} onClose={() => setShowWidgetSettings(false)} />}
-    {showCustomActivity && api && <CustomActivityDialog api={api} date={date} onClose={() => setShowCustomActivity(false)} onCreated={load} />}
-    {editingNutrition && api && <NutritionEntryDialog api={api} entry={editingNutrition} onClose={() => setEditingNutrition(null)} onSaved={load} />}
+    {showCustomActivity && <CustomActivityDialog api={api} date={date} onClose={() => setShowCustomActivity(false)} onCreated={load} />}
+    {editingNutrition && <NutritionEntryDialog api={api} entry={editingNutrition} onClose={() => setEditingNutrition(null)} onSaved={load} />}
   </div>;
 }
