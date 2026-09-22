@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { RequestAuthorizer } from '../src/auth/service.js';
 import type { CoachConversationRecord, CoachMessageRecord, CoachRepository, NewCoachMessage } from '../src/coach/repository.js';
 import { registerCoachRoutes } from '../src/coach/routes.js';
+import { registerCoachSettingsRoutes } from '../src/coach/settings-routes.js';
+import { CoachSettingsAwareProvider } from '../src/coach/settings-provider.js';
+import type { CoachSettingsRepository } from '../src/coach/settings.js';
 import type { DeepSeekTurnInput } from '../src/coach/deepseek.js';
 import { COACH_SYSTEM_PROMPT } from '../src/coach/system-prompt.js';
 
@@ -42,30 +45,36 @@ const authorizer: RequestAuthorizer = {
   },
 };
 
+function memorySettingsRepository() {
+  let override: string | null = null;
+  const repository: CoachSettingsRepository = {
+    async getSystemPromptOverride() { return override; },
+    async setSystemPromptOverride(value) { override = value; },
+  };
+  return repository;
+}
+
 describe('Coach settings API', () => {
   it('reads, edits and resets the main system prompt and uses the override on the next turn', async () => {
     const app = Fastify();
     const coachRepository = memoryCoachRepository();
-    let override: string | null = null;
-    const coachSettingsRepository = {
-      async getSystemPromptOverride() { return override; },
-      async setSystemPromptOverride(value: string | null) { override = value; },
-    };
+    const coachSettingsRepository = memorySettingsRepository();
     let providerInput: DeepSeekTurnInput | null = null;
+    const provider = new CoachSettingsAwareProvider({
+      async completeTurn(input: DeepSeekTurnInput) {
+        providerInput = input;
+        return { content: 'Gotowe.', toolCalls: [] };
+      },
+    }, coachSettingsRepository);
 
+    registerCoachSettingsRoutes(app, { authorizer, coachSettingsRepository });
     registerCoachRoutes(app, {
       authorizer,
       coachRepository,
-      coachSettingsRepository,
-      deepseekClient: {
-        async completeTurn(input: DeepSeekTurnInput) {
-          providerInput = input;
-          return { content: 'Gotowe.', toolCalls: [] };
-        },
-      },
+      deepseekClient: provider,
       coachModel: 'deepseek-flash',
       timeZone: 'Europe/Warsaw',
-    } as any);
+    });
 
     const initial = await app.inject({ method: 'GET', url: '/api/v1/coach/settings', headers: { authorization: 'Bearer web' } });
     expect(initial.statusCode).toBe(200);
@@ -105,17 +114,10 @@ describe('Coach settings API', () => {
 
   it('rejects an empty custom prompt', async () => {
     const app = Fastify();
-    registerCoachRoutes(app, {
+    registerCoachSettingsRoutes(app, {
       authorizer,
-      coachRepository: memoryCoachRepository(),
-      coachSettingsRepository: {
-        async getSystemPromptOverride() { return null; },
-        async setSystemPromptOverride() {},
-      },
-      deepseekClient: null,
-      coachModel: 'deepseek-flash',
-      timeZone: 'Europe/Warsaw',
-    } as any);
+      coachSettingsRepository: memorySettingsRepository(),
+    });
 
     const response = await app.inject({
       method: 'PATCH',
