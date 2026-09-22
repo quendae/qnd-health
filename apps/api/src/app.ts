@@ -18,6 +18,7 @@ import type { HealthProfileRepository } from './profile/repository.js';
 import { registerProfileRoutes } from './profile/routes.js';
 import type { CoachRepository } from './coach/repository.js';
 import type { CoachSettingsRepository } from './coach/settings.js';
+import { registerCoachSettingsRoutes } from './coach/settings-routes.js';
 import { registerCoachRoutes, type CoachTurnProvider } from './coach/routes.js';
 import { registerTodayRoutes } from './today/routes.js';
 import { registerInsightRoutes } from './insights/routes.js';
@@ -111,11 +112,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       timeZone,
     });
   }
+  if (authorizer && options.coachSettingsRepository) {
+    registerCoachSettingsRoutes(app, {
+      authorizer,
+      coachSettingsRepository: options.coachSettingsRepository,
+    });
+  }
   if (authorizer && options.coachRepository) {
     registerCoachRoutes(app, {
       authorizer,
       coachRepository: options.coachRepository,
-      coachSettingsRepository: options.coachSettingsRepository,
       deepseekClient: options.deepseekClient ?? null,
       coachModel: options.coachModel ?? 'deepseek-flash',
       planRepository: options.planRepository,
