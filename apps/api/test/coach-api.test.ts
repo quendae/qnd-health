@@ -5,6 +5,8 @@ import type { CoachConversationRecord, CoachMessageRecord, CoachRepository, NewC
 import { registerCoachRoutes } from '../src/coach/routes.js';
 import type { DeepSeekTurnInput, DeepSeekTurnResult } from '../src/coach/deepseek.js';
 import type { AuditEventInput, AuditRepository } from '../src/audit/repository.js';
+import { ProfileGoalService } from '../src/profile/goals.js';
+import type { ProfileGoalRevisionRecord, ProfileGoalRevisionRepository } from '../src/profile/goal-repository.js';
 import type { HealthProfileRecord, HealthProfileRepository } from '../src/profile/repository.js';
 
 function memoryCoachRepository(): CoachRepository & { conversations: CoachConversationRecord[]; messages: CoachMessageRecord[] } {
@@ -49,6 +51,29 @@ function profileRepo(): HealthProfileRepository & { current: HealthProfileRecord
   return repo;
 }
 
+function goalService(profileRepository: HealthProfileRepository) {
+  const rows: ProfileGoalRevisionRecord[] = [];
+  const revisions: ProfileGoalRevisionRepository = {
+    async findActiveOn(date) {
+      return [...rows]
+        .filter(row => row.effectiveFrom <= date)
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+    },
+    async list() { return [...rows]; },
+    async count() { return rows.length; },
+    async create(input) {
+      const row: ProfileGoalRevisionRecord = {
+        id: `goal-${rows.length + 1}`,
+        createdAt: new Date().toISOString(),
+        ...input,
+      };
+      rows.push(row);
+      return row;
+    },
+  };
+  return { service: new ProfileGoalService(revisions, profileRepository), rows };
+}
+
 const authorizer: RequestAuthorizer = {
   async authorize(_authorization, requiredScopes) {
     expect(requiredScopes).toContain('coach:write');
@@ -60,6 +85,7 @@ async function setup(provider: { completeTurn(input: DeepSeekTurnInput): Promise
   const app = Fastify();
   const coachRepository = memoryCoachRepository();
   const profileRepository = profileRepo();
+  const goals = goalService(profileRepository);
   const audits: AuditEventInput[] = [];
   const auditRepository: AuditRepository = { async record(event) { audits.push(event); } };
   registerCoachRoutes(app, {
@@ -68,16 +94,17 @@ async function setup(provider: { completeTurn(input: DeepSeekTurnInput): Promise
     deepseekClient: provider,
     coachModel: 'deepseek-flash',
     profileRepository,
+    profileGoalService: goals.service,
     auditRepository,
     timeZone: 'Europe/Warsaw',
   });
-  return { app, coachRepository, profileRepository, audits };
+  return { app, coachRepository, profileRepository, goalRows: goals.rows, audits };
 }
 
 describe('Coach conversation API', () => {
   it('persists a user/assistant turn and executes an allow-listed tool call', async () => {
     let call = 0;
-    const { app, coachRepository, profileRepository, audits } = await setup({
+    const { app, coachRepository, goalRows, audits } = await setup({
       async completeTurn(input) {
         call += 1;
         expect(input.messages[0]?.role).toBe('system');
@@ -103,8 +130,8 @@ describe('Coach conversation API', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().message).toMatchObject({ role: 'assistant', content: 'Ustawiłem dzienny cel na 8000 kroków.', model: 'deepseek-flash' });
-    expect(response.json().actions).toEqual([{ toolCallId: 'tc1', name: 'set_default_step_goal', status: 'completed', result: expect.objectContaining({ defaultStepsGoal: 8000 }) }]);
-    expect(profileRepository.current?.defaultStepsGoal).toBe(8000);
+    expect(response.json().actions).toEqual([{ toolCallId: 'tc1', name: 'set_default_step_goal', status: 'completed', result: expect.objectContaining({ defaultStepsGoal: 8000, source: 'coach' }) }]);
+    expect(goalRows.at(-1)).toMatchObject({ defaultStepsGoal: 8000, source: 'coach', sourceRef: conversationId });
     expect(coachRepository.messages.map(message => message.role)).toEqual(['user', 'tool', 'assistant']);
     expect(audits).toHaveLength(1);
     await app.close();
@@ -112,7 +139,7 @@ describe('Coach conversation API', () => {
 
   it('keeps only current-turn completed actions when the provider fails afterwards', async () => {
     let call = 0;
-    const { app, coachRepository, profileRepository, audits } = await setup({
+    const { app, coachRepository, goalRows, audits } = await setup({
       async completeTurn() {
         call += 1;
         if (call === 1) return { content: null, toolCalls: [{ id: 'tc2', name: 'set_default_step_goal', arguments: { steps: 9000 } }] };
@@ -138,7 +165,7 @@ describe('Coach conversation API', () => {
     expect(response.json().completedActions).toEqual([
       expect.objectContaining({ toolCallId: 'tc2', name: 'set_default_step_goal', status: 'completed' }),
     ]);
-    expect(profileRepository.current?.defaultStepsGoal).toBe(9000);
+    expect(goalRows.at(-1)).toMatchObject({ defaultStepsGoal: 9000, source: 'coach', sourceRef: conversation.id });
     expect(coachRepository.messages.slice(-2).map(message => message.role)).toEqual(['user', 'tool']);
     expect(audits).toHaveLength(1);
     await app.close();
