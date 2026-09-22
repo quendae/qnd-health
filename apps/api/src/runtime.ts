@@ -4,6 +4,8 @@ import { createPrismaCoachSettingsRepository } from './coach/prisma-settings-rep
 import { CoachSettingsAwareProvider } from './coach/settings-provider.js';
 import { createPrismaRepositories, type PrismaClientPort } from './persistence/prisma-repositories.js';
 import { createPrismaMeasurementRepository } from './measurements/prisma-repository.js';
+import { createPrismaGoalRevisionRepository } from './profile/prisma-goal-repository.js';
+import { ProfileGoalService } from './profile/goals.js';
 
 export interface RuntimeAppOptions {
   prisma: PrismaClientPort;
@@ -20,6 +22,8 @@ export function buildRuntimeApp(options: RuntimeAppOptions) {
   const repositories = createPrismaRepositories(options.prisma);
   const measurementRepository = createPrismaMeasurementRepository(options.prisma);
   const coachSettingsRepository = createPrismaCoachSettingsRepository(options.prisma);
+  const goalRevisionRepository = createPrismaGoalRevisionRepository(options.prisma);
+  const profileGoalService = new ProfileGoalService(goalRevisionRepository, repositories.profileRepository);
   const baseDeepseekClient = options.deepseekApiKey
     ? new DeepSeekClient({
       apiKey: options.deepseekApiKey,
@@ -37,6 +41,7 @@ export function buildRuntimeApp(options: RuntimeAppOptions) {
     timeZone: options.timeZone ?? 'Europe/Warsaw',
     deepseekClient,
     coachSettingsRepository,
+    profileGoalService,
     coachModel: options.deepseekModel ?? 'deepseek-flash',
     ...repositories,
     measurementRepository,
