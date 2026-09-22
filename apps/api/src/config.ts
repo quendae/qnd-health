@@ -7,6 +7,8 @@ export interface AppConfig {
   port: number;
   databaseUrl: string;
   tokenPepper: string;
+  webUsername: string;
+  webPassword: string | null;
   timeZone: string;
   webDistPath: string;
   deepseekApiKey: string | null;
@@ -52,12 +54,15 @@ export function loadConfig(inputEnv?: NodeJS.ProcessEnv): AppConfig {
     env.DATABASE_URL?.trim() || 'file:./data/qnd-health.db',
     projectRoot,
   );
+  const configuredWebPassword = env.WEB_PASSWORD;
 
   return {
     host: env.HOST?.trim() || '127.0.0.1',
     port,
     databaseUrl,
     tokenPepper: required(env, 'TOKEN_PEPPER'),
+    webUsername: env.WEB_USERNAME?.trim() || 'quendae',
+    webPassword: configuredWebPassword && configuredWebPassword.length > 0 ? configuredWebPassword : null,
     timeZone: env.TIME_ZONE?.trim() || 'Europe/Warsaw',
     webDistPath: resolve(projectRoot, env.WEB_DIST_PATH?.trim() || 'apps/web/dist'),
     deepseekApiKey: env.DEEPSEEK_API_KEY?.trim() || null,
