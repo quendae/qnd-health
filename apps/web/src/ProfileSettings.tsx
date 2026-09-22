@@ -59,7 +59,7 @@ export function ProfileSettings({
       <div><h2>Profil zdrowotny</h2><p>Dane do celów oraz szacowania BMR/TDEE</p></div>
     </header>
 
-    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to osobny szacunek wydatku energii. Cele kcal i białka ustawiasz ręcznie — aplikacja nie narzuca deficytu ani makr.</p>
+    <p className="settings-copy">BMR liczymy lokalnie wzorem Mifflina–St Jeora. TDEE to osobny szacunek wydatku energii. Cele kalorii, makro, kroków i współczynnik aktywności są wersjonowane w czasie — zmiana obowiązuje od dnia zapisu, bez zmiany historii.</p>
 
     {loading ? <div className="empty">Wczytywanie profilu…</div> : <>
       <div className="profile-form">
@@ -78,7 +78,7 @@ export function ProfileSettings({
         </label>
         <label>Współczynnik aktywności
           <input type="number" min="1" max="3" step="0.05" value={form.activityFactor} onChange={event => update('activityFactor', event.target.value)} />
-          <small>Domyślnie 1,2. Wpływa wyłącznie na szacowane TDEE.</small>
+          <small>Wpływa na szacowane TDEE i może być zmieniany także przez Coacha.</small>
         </label>
         <label>Domyślny cel kroków
           <input type="number" min="1" max="100000" step="100" value={form.defaultStepsGoal} onChange={event => update('defaultStepsGoal', event.target.value)} />
@@ -86,11 +86,19 @@ export function ProfileSettings({
         </label>
         <label>Dzienny cel kcal
           <input type="number" min="1" max="20000" step="50" value={form.dailyCaloriesGoalKcal} onChange={event => update('dailyCaloriesGoalKcal', event.target.value)} placeholder="np. 2200" />
-          <small>Pozostaw puste, jeśli nie chcesz śledzić celu kalorii. To cel ręczny, niezależny od TDEE.</small>
         </label>
         <label>Dzienny cel białka (g)
           <input type="number" min="1" max="1000" step="5" value={form.dailyProteinGoalGrams} onChange={event => update('dailyProteinGoalGrams', event.target.value)} placeholder="np. 160" />
-          <small>Pozostaw puste, jeśli nie chcesz śledzić celu białka. Postęp pokażemy na Dzisiaj i w Postępach.</small>
+        </label>
+        <label>Dzienny cel węglowodanów (g)
+          <input type="number" min="1" max="2000" step="5" value={form.dailyCarbsGoalGrams} onChange={event => update('dailyCarbsGoalGrams', event.target.value)} placeholder="np. 220" />
+        </label>
+        <label>Dzienny cel tłuszczu (g)
+          <input type="number" min="1" max="1000" step="5" value={form.dailyFatGoalGrams} onChange={event => update('dailyFatGoalGrams', event.target.value)} placeholder="np. 70" />
+        </label>
+        <label>Dzienny cel błonnika (g)
+          <input type="number" min="1" max="500" step="1" value={form.dailyFiberGoalGrams} onChange={event => update('dailyFiberGoalGrams', event.target.value)} placeholder="np. 30" />
+          <small>Puste pole wyłącza śledzenie danego celu. Coach może zmieniać te same cele na podstawie rozmowy i danych.</small>
         </label>
       </div>
 
@@ -103,7 +111,7 @@ export function ProfileSettings({
         </div>
         <button className="primary" onClick={() => void save()} disabled={saving}><Save size={15} /> {saving ? 'Zapisywanie…' : 'Zapisz profil'}</button>
       </div>
-      {saved && <div className="profile-saved">Profil zapisany.</div>}
+      {saved && <div className="profile-saved">Profil i cele zapisane od dzisiaj.</div>}
     </>}
   </article>;
 }
