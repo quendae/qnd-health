@@ -22,8 +22,9 @@ export function buildRuntimeApp(options: RuntimeAppOptions) {
   const repositories = createPrismaRepositories(options.prisma);
   const measurementRepository = createPrismaMeasurementRepository(options.prisma);
   const coachSettingsRepository = createPrismaCoachSettingsRepository(options.prisma);
-  const goalRevisionRepository = createPrismaGoalRevisionRepository(options.prisma);
-  const profileGoalService = new ProfileGoalService(goalRevisionRepository, repositories.profileRepository);
+  const profileGoalService = options.prisma.profileGoalRevision
+    ? new ProfileGoalService(createPrismaGoalRevisionRepository(options.prisma), repositories.profileRepository)
+    : undefined;
   const baseDeepseekClient = options.deepseekApiKey
     ? new DeepSeekClient({
       apiKey: options.deepseekApiKey,
