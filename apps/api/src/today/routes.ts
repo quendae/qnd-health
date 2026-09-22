@@ -9,6 +9,7 @@ import type { MeasurementRepository } from '../measurements/repository.js';
 import type { DailyHealthRecord, DailyHealthRepository } from '../health/repository.js';
 import type { CompletedActivityRepository } from '../activities/repository.js';
 import type { HealthProfileRepository } from '../profile/repository.js';
+import type { ProfileGoalService } from '../profile/goals.js';
 import { calculateBmr, calculateTdee } from '../profile/energy.js';
 import { localIsoDate, weekBounds } from './date-utils.js';
 import { sendValidationError } from '../http/errors.js';
@@ -46,6 +47,7 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
   nutritionRepository: NutritionRepository;
   measurementRepository: MeasurementRepository;
   profileRepository?: HealthProfileRepository;
+  profileGoalService?: ProfileGoalService;
   dailyHealthRepository: DailyHealthRepository;
   completedActivityRepository: CompletedActivityRepository;
   timeZone: string;
@@ -57,14 +59,25 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
 
     const date = parsed.data.date;
     const week = weekBounds(date);
-    const [weekPlans, health, nutritionEntries, measurements, completedActivities, profile] = await Promise.all([
+    const [weekPlans, health, nutritionEntries, measurements, completedActivities, profile, goalRevision] = await Promise.all([
       deps.planRepository.list(week.start, week.end),
       deps.dailyHealthRepository.findByDate(date),
       deps.nutritionRepository.list(),
       deps.measurementRepository.list(),
       deps.completedActivityRepository.list(),
       deps.profileRepository?.get() ?? Promise.resolve(null),
+      deps.profileGoalService?.resolve(date) ?? Promise.resolve(null),
     ]);
+
+    const goals = goalRevision ?? {
+      activityFactor: profile?.activityFactor ?? 1.2,
+      defaultStepsGoal: profile?.defaultStepsGoal ?? 7500,
+      dailyCaloriesGoalKcal: profile?.dailyCaloriesGoalKcal ?? null,
+      dailyProteinGoalGrams: profile?.dailyProteinGoalGrams ?? null,
+      dailyCarbsGoalGrams: null,
+      dailyFatGoalGrams: null,
+      dailyFiberGoalGrams: null,
+    };
 
     const todaysPlans = weekPlans.filter((plan) => plan.date === date);
     const todaysNutrition = nutritionEntries
@@ -92,16 +105,16 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
     const bmrKcal = profile
       ? calculateBmr(profile, latestMeasurement?.weightKg ?? null, date)
       : null;
-    const energy = bmrKcal != null && profile
+    const energy = bmrKcal != null
       ? {
           bmrKcal,
-          tdeeKcal: calculateTdee(bmrKcal, profile.activityFactor),
+          tdeeKcal: calculateTdee(bmrKcal, goals.activityFactor),
           source: 'mifflin_st_jeor' as const,
-          activityFactor: profile.activityFactor,
+          activityFactor: goals.activityFactor,
         }
       : null;
 
-    const stepGoal = resolveStepGoal(health?.stepsGoal, profile?.defaultStepsGoal ?? null);
+    const stepGoal = resolveStepGoal(health?.stepsGoal, goals.defaultStepsGoal);
     const steps = typeof health?.steps === 'number' && Number.isFinite(health.steps) && health.steps >= 0 ? health.steps : 0;
 
     const toDatePlans = weekPlans.filter((plan) => plan.date <= date);
@@ -119,9 +132,18 @@ export function registerTodayRoutes(app: FastifyInstance, deps: {
       nutrition: {
         entries: todaysNutrition,
         summary: summarizeNutrition(date, todaysNutrition),
-        goalKcal: profile?.dailyCaloriesGoalKcal ?? null,
-        goalProteinGrams: profile?.dailyProteinGoalGrams ?? null,
+        goalKcal: goals.dailyCaloriesGoalKcal,
+        goalProteinGrams: goals.dailyProteinGoalGrams,
+        goalCarbsGrams: goals.dailyCarbsGoalGrams,
+        goalFatGrams: goals.dailyFatGoalGrams,
+        goalFiberGrams: goals.dailyFiberGoalGrams,
       },
+      goalRevision: goalRevision ? {
+        id: goalRevision.revisionId,
+        effectiveFrom: goalRevision.effectiveFrom,
+        source: goalRevision.source,
+        reason: goalRevision.reason,
+      } : null,
       weekToDate: {
         totalPlanItems: toDatePlans.length,
         completed: toDateProgress.filter((progress) => progress.status === 'completed').length,
