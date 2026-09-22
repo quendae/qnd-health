@@ -65,10 +65,11 @@ export async function executeSafeWrite<T>(input: {
   }
 
   const result = await input.perform();
+  const isWebSession = input.tokenId === 'web-session';
 
   await input.auditRepository.record({
-    actorType: 'api_token',
-    apiTokenId: input.tokenId,
+    actorType: isWebSession ? 'web_session' : 'api_token',
+    apiTokenId: isWebSession ? null : input.tokenId,
     action: input.action,
     entityType: input.entityType,
     entityId: result.entityId,
