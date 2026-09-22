@@ -148,6 +148,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       completedActivityRepository: options.completedActivityRepository,
       nutritionRepository: options.nutritionRepository,
       profileRepository: options.profileRepository,
+      profileGoalService: options.profileGoalService,
       timeZone,
     });
   }
