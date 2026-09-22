@@ -59,10 +59,10 @@ describe('Coach settings API', () => {
     const app = Fastify();
     const coachRepository = memoryCoachRepository();
     const coachSettingsRepository = memorySettingsRepository();
-    let providerInput: DeepSeekTurnInput | null = null;
+    const providerInputs: DeepSeekTurnInput[] = [];
     const provider = new CoachSettingsAwareProvider({
       async completeTurn(input: DeepSeekTurnInput) {
-        providerInput = input;
+        providerInputs.push(input);
         return { content: 'Gotowe.', toolCalls: [] };
       },
     }, coachSettingsRepository);
@@ -98,7 +98,7 @@ describe('Coach settings API', () => {
       payload: { content: 'Jak dziś trenować?' },
     });
     expect(turn.statusCode).toBe(200);
-    expect(providerInput?.messages[0]).toEqual({ role: 'system', content: customPrompt });
+    expect(providerInputs[0]?.messages[0]).toEqual({ role: 'system', content: customPrompt });
 
     const reset = await app.inject({
       method: 'PATCH',
