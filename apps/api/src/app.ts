@@ -15,6 +15,7 @@ import type { CompletedActivityRepository } from './activities/repository.js';
 import type { ActivityMatchRepository } from './activities/matches.js';
 import { registerActivityRoutes } from './activities/routes.js';
 import type { HealthProfileRepository } from './profile/repository.js';
+import type { ProfileGoalService } from './profile/goals.js';
 import { registerProfileRoutes } from './profile/routes.js';
 import type { CoachRepository } from './coach/repository.js';
 import type { CoachSettingsRepository } from './coach/settings.js';
@@ -37,6 +38,7 @@ export interface BuildAppOptions {
   nutritionRepository?: NutritionRepository;
   measurementRepository?: MeasurementRepository;
   profileRepository?: HealthProfileRepository;
+  profileGoalService?: ProfileGoalService;
   dailyHealthRepository?: DailyHealthRepository;
   completedActivityRepository?: CompletedActivityRepository;
   activityMatchRepository?: ActivityMatchRepository;
@@ -107,6 +109,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerProfileRoutes(app, {
       authorizer,
       profileRepository: options.profileRepository,
+      profileGoalService: options.profileGoalService,
       auditRepository,
       idempotencyRepository,
       timeZone,
@@ -128,6 +131,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       nutritionRepository: options.nutritionRepository,
       measurementRepository: options.measurementRepository,
       profileRepository: options.profileRepository,
+      profileGoalService: options.profileGoalService,
       dailyHealthRepository: options.dailyHealthRepository,
       completedActivityRepository: options.completedActivityRepository,
       activityMatchRepository: options.activityMatchRepository,
@@ -154,6 +158,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       nutritionRepository: options.nutritionRepository,
       measurementRepository: options.measurementRepository,
       profileRepository: options.profileRepository,
+      profileGoalService: options.profileGoalService,
       dailyHealthRepository: options.dailyHealthRepository,
       completedActivityRepository: options.completedActivityRepository,
       timeZone,
